@@ -9,4 +9,14 @@ class LibraryBook extends Model
 {
     use HasFactory;
     protected $guarded = [];
+
+    public function folders()
+    {
+        return $this->hasMany(LibraryFolder::class);
+    }
+
+    public function files()
+    {
+        return $this->hasMany(LibraryFile::class);
+    }
 }
