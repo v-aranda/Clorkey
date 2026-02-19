@@ -27,10 +27,10 @@ const sidebarCollapsed = ref(false);
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
                 <!-- Dashboard -->
                 <Link
-                    :href="route('dashboard')"
+                    :href="route('library.index')"
                     :class="[
                         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                        route().current('dashboard')
+                        route().current('library.*')
                             ? 'bg-slate-800 text-white'
                             : 'text-slate-300 hover:bg-slate-800 hover:text-white',
                     ]"
