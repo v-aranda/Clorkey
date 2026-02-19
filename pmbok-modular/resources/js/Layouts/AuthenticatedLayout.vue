@@ -26,15 +26,12 @@ const sidebarCollapsed = ref(false);
             <!-- Navigation -->
             <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
                 <!-- Dashboard -->
-                <Link
-                    :href="route('library.index')"
-                    :class="[
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                        route().current('library.*')
-                            ? 'bg-slate-800 text-white'
-                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    ]"
-                >
+                <Link :href="route('library.index')" :class="[
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    route().current('library.*')
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                ]">
                     <Library class="h-5 w-5" />
                     Biblioteca
                 </Link>
@@ -46,15 +43,12 @@ const sidebarCollapsed = ref(false);
                     <p class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Administração
                     </p>
-                    <Link
-                        :href="route('admin.users.index')"
-                        :class="[
-                            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                            route().current('admin.users.*')
-                                ? 'bg-slate-800 text-white'
-                                : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                        ]"
-                    >
+                    <Link :href="route('admin.users.index')" :class="[
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        route().current('admin.users.*')
+                            ? 'bg-slate-800 text-white'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                    ]">
                         <Users class="h-5 w-5" />
                         Usuários
                     </Link>
@@ -64,11 +58,10 @@ const sidebarCollapsed = ref(false);
 
             <!-- User section at bottom -->
             <div class="relative border-t border-slate-700 p-3">
-                <button
-                    @click="showUserMenu = !showUserMenu"
-                    class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-slate-800"
-                >
-                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold uppercase">
+                <button @click="showUserMenu = !showUserMenu"
+                    class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-slate-800">
+                    <div
+                        class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold uppercase">
                         {{ user.name.charAt(0) }}
                     </div>
                     <div class="flex-1 text-left">
@@ -79,23 +72,15 @@ const sidebarCollapsed = ref(false);
                 </button>
 
                 <!-- User dropdown -->
-                <div
-                    v-if="showUserMenu"
-                    class="absolute bottom-full left-3 right-3 mb-1 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg"
-                >
-                    <Link
-                        :href="route('profile.edit')"
-                        class="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
-                    >
+                <div v-if="showUserMenu"
+                    class="absolute bottom-full left-3 right-3 mb-1 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg">
+                    <Link :href="route('profile.edit')"
+                        class="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">
                         <User class="h-4 w-4" />
                         Perfil
                     </Link>
-                    <Link
-                        :href="route('logout')"
-                        method="post"
-                        as="button"
-                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
-                    >
+                    <Link :href="route('logout')" method="post" as="button"
+                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">
                         <LogOut class="h-4 w-4" />
                         Sair
                     </Link>
