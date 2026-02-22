@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,7 +20,6 @@ class UserController extends Controller
 
         $query = User::latest();
 
-        // Active or inactive (soft-deleted)
         if ($status === 'inactive') {
             $query->onlyTrashed();
         }
@@ -40,6 +40,7 @@ class UserController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
+                    'avatar_url' => $user->avatar_url,
                     'created_at' => $user->created_at->format('d/m/Y H:i'),
                     'deleted_at' => $user->deleted_at?->format('d/m/Y H:i'),
                 ]),
@@ -52,17 +53,45 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): RedirectResponse
     {
-        User::create($request->validated());
+        $data = $request->safe()->except(['avatar']);
+
+        $user = User::create($data);
+
+        if ($request->hasFile('avatar')) {
+            $ext = $request->file('avatar')->getClientOriginalExtension();
+            $path = $request->file('avatar')->storeAs(
+                'avatars',
+                $user->id . '_' . time() . '.' . $ext,
+                's3'
+            );
+            $user->update(['avatar_path' => $path]);
+        }
 
         return back()->with('success', 'Usuário criado com sucesso.');
     }
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $request->safe()->except(['avatar', 'remove_avatar']);
 
         if (empty($data['password'])) {
             unset($data['password']);
+        }
+
+        if ($request->boolean('remove_avatar') && $user->avatar_path) {
+            Storage::disk('s3')->delete($user->avatar_path);
+            $data['avatar_path'] = null;
+        } elseif ($request->hasFile('avatar')) {
+            if ($user->avatar_path) {
+                Storage::disk('s3')->delete($user->avatar_path);
+            }
+            $ext = $request->file('avatar')->getClientOriginalExtension();
+            $path = $request->file('avatar')->storeAs(
+                'avatars',
+                $user->id . '_' . time() . '.' . $ext,
+                's3'
+            );
+            $data['avatar_path'] = $path;
         }
 
         $user->update($data);

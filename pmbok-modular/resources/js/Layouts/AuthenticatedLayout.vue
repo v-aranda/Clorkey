@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { LayoutDashboard, Users, Library, ChevronDown, LogOut, User } from 'lucide-vue-next';
+import UserAvatar from '@/Components/UserAvatar.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -60,10 +61,7 @@ const sidebarCollapsed = ref(false);
             <div class="relative border-t border-slate-700 p-3">
                 <button @click="showUserMenu = !showUserMenu"
                     class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-slate-800">
-                    <div
-                        class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold uppercase">
-                        {{ user.name.charAt(0) }}
-                    </div>
+                    <UserAvatar :user="user" size="sm" />
                     <div class="flex-1 text-left">
                         <p class="text-sm font-medium text-white">{{ user.name }}</p>
                         <p class="text-xs text-slate-400">{{ user.email }}</p>

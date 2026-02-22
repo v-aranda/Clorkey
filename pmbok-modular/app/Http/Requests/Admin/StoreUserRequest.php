@@ -27,6 +27,7 @@ class StoreUserRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', Password::min(6)],
             'role' => ['required', 'string', 'in:admin,user'],
+            'avatar' => ['nullable', 'image', 'max:2048'],
         ];
     }
 

@@ -1,7 +1,8 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import UserAvatar from '@/Components/UserAvatar.vue'
 import {
     useVueTable,
     getCoreRowModel,
@@ -11,7 +12,7 @@ import {
 import Badge from '@/Components/ui/Badge.vue'
 import Button from '@/Components/ui/Button.vue'
 import Dialog from '@/Components/ui/Dialog.vue'
-import { Pencil, Trash2, Plus, Users, ArrowUpDown, ArrowUp, ArrowDown, Search, X, RefreshCcw } from 'lucide-vue-next'
+import { Pencil, Trash2, Plus, Users, ArrowUpDown, ArrowUp, ArrowDown, Search, X, RefreshCcw, Camera } from 'lucide-vue-next'
 
 const props = defineProps({
     users: Object,
@@ -51,6 +52,13 @@ const showDeleteDialog = ref(false)
 const showRestoreDialog = ref(false)
 const selectedUser = ref(null)
 
+// Avatar preview state
+const createAvatarPreview = ref(null)
+const editAvatarPreview = ref(null)
+const createFileInput = ref(null)
+const editFileInput = ref(null)
+const editRemoveAvatar = ref(false)
+
 // Toast state
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -74,6 +82,7 @@ const createForm = useForm({
     email: '',
     password: '',
     role: 'user',
+    avatar: null,
 })
 
 const editForm = useForm({
@@ -81,6 +90,24 @@ const editForm = useForm({
     email: '',
     password: '',
     role: '',
+    avatar: null,
+    remove_avatar: false,
+})
+
+// Create avatar preview user
+const createPreviewUser = computed(() => ({
+    name: createForm.name || '?',
+    avatar_url: createAvatarPreview.value,
+}))
+
+const editPreviewUser = computed(() => {
+    if (editAvatarPreview.value) {
+        return { name: editForm.name || '?', avatar_url: editAvatarPreview.value }
+    }
+    if (editRemoveAvatar.value) {
+        return { name: editForm.name || '?', avatar_url: null }
+    }
+    return { name: editForm.name || '?', avatar_url: selectedUser.value?.avatar_url }
 })
 
 // Column definitions (TanStack headless)
@@ -134,6 +161,7 @@ const table = useVueTable({
 function openCreate() {
     createForm.reset()
     createForm.clearErrors()
+    createAvatarPreview.value = null
     showEditPanel.value = false
     showCreatePanel.value = true
 }
@@ -144,7 +172,11 @@ function openEdit(user) {
     editForm.email = user.email
     editForm.password = ''
     editForm.role = user.role
+    editForm.avatar = null
+    editForm.remove_avatar = false
     editForm.clearErrors()
+    editAvatarPreview.value = null
+    editRemoveAvatar.value = false
     showCreatePanel.value = false
     showEditPanel.value = true
 }
@@ -164,12 +196,58 @@ function closePanel() {
     showEditPanel.value = false
 }
 
+// Avatar handlers for create
+function selectCreateAvatar() {
+    createFileInput.value.click()
+}
+
+function onCreateAvatarSelected(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    createForm.avatar = file
+    const reader = new FileReader()
+    reader.onload = (ev) => { createAvatarPreview.value = ev.target.result }
+    reader.readAsDataURL(file)
+}
+
+function removeCreateAvatar() {
+    createForm.avatar = null
+    createAvatarPreview.value = null
+    if (createFileInput.value) createFileInput.value.value = ''
+}
+
+// Avatar handlers for edit
+function selectEditAvatar() {
+    editFileInput.value.click()
+}
+
+function onEditAvatarSelected(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    editForm.avatar = file
+    editForm.remove_avatar = false
+    editRemoveAvatar.value = false
+    const reader = new FileReader()
+    reader.onload = (ev) => { editAvatarPreview.value = ev.target.result }
+    reader.readAsDataURL(file)
+}
+
+function removeEditAvatar() {
+    editForm.avatar = null
+    editForm.remove_avatar = true
+    editRemoveAvatar.value = true
+    editAvatarPreview.value = null
+    if (editFileInput.value) editFileInput.value.value = ''
+}
+
 function submitCreate() {
     createForm.post(route('admin.users.store'), {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: () => {
             showCreatePanel.value = false
             createForm.reset()
+            createAvatarPreview.value = null
             triggerToast('Usuário criado com sucesso!')
         },
     })
@@ -178,9 +256,12 @@ function submitCreate() {
 function submitEdit() {
     editForm.put(route('admin.users.update', selectedUser.value.id), {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: () => {
             showEditPanel.value = false
             editForm.reset()
+            editAvatarPreview.value = null
+            editRemoveAvatar.value = false
             triggerToast('Usuário atualizado com sucesso!')
         },
     })
@@ -234,7 +315,7 @@ function goToPage(url) {
                     <Users class="h-6 w-6 text-gray-600" />
                     <h1 class="text-lg font-semibold text-gray-900">Gestão de Usuários</h1>
                 </div>
-                
+
                 <div class="flex items-center gap-3">
                     <!-- Status Toggle -->
                     <div class="flex bg-gray-100 p-1 rounded-lg">
@@ -311,9 +392,12 @@ function goToPage(url) {
                         class="border-b transition-colors hover:bg-muted/50"
                     >
                         <td class="p-4 align-middle font-medium">
-                            <div class="flex flex-col">
-                                <span>{{ row.getValue('name') }}</span>
-                                <span v-if="status === 'inactive'" class="text-xs text-red-500">Deletado em: {{ row.original.deleted_at }}</span>
+                            <div class="flex items-center gap-3">
+                                <UserAvatar :user="row.original" size="sm" />
+                                <div class="flex flex-col">
+                                    <span>{{ row.getValue('name') }}</span>
+                                    <span v-if="status === 'inactive'" class="text-xs text-red-500">Deletado em: {{ row.original.deleted_at }}</span>
+                                </div>
                             </div>
                         </td>
                         <td class="p-4 align-middle text-muted-foreground">{{ row.getValue('email') }}</td>
@@ -328,10 +412,10 @@ function goToPage(url) {
                                 <Button variant="ghost" size="icon" @click="openEdit(row.original)">
                                     <Pencil class="h-4 w-4" />
                                 </Button>
-                                <Button 
+                                <Button
                                     v-if="!['aurora@pmbok.sys', 'prisma@pmbok.sys'].includes(row.original.email)"
-                                    variant="ghost" 
-                                    size="icon" 
+                                    variant="ghost"
+                                    size="icon"
                                     @click="openDelete(row.original)"
                                 >
                                     <Trash2 class="h-4 w-4 text-red-500" />
@@ -376,6 +460,23 @@ function goToPage(url) {
                 </div>
                 <div class="flex-1 overflow-y-auto px-6 py-6">
                     <form @submit.prevent="submitCreate" class="space-y-5">
+                        <!-- Avatar Upload -->
+                        <div class="flex items-center gap-4">
+                            <UserAvatar :user="createPreviewUser" size="lg" />
+                            <div class="flex flex-col gap-2">
+                                <input ref="createFileInput" type="file" accept="image/*" class="hidden" @change="onCreateAvatarSelected" />
+                                <button type="button" @click="selectCreateAvatar" class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
+                                    <Camera class="h-4 w-4" />
+                                    Foto
+                                </button>
+                                <button v-if="createAvatarPreview" type="button" @click="removeCreateAvatar" class="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm hover:bg-red-50 transition-colors">
+                                    <Trash2 class="h-3.5 w-3.5" />
+                                    Remover
+                                </button>
+                            </div>
+                            <p v-if="createForm.errors.avatar" class="text-sm text-red-500">{{ createForm.errors.avatar }}</p>
+                        </div>
+
                         <div>
                             <label for="create-name" class="text-sm font-medium text-gray-700">Nome</label>
                             <input
@@ -442,6 +543,23 @@ function goToPage(url) {
                 </div>
                 <div class="flex-1 overflow-y-auto px-6 py-6">
                     <form @submit.prevent="submitEdit" class="space-y-5">
+                        <!-- Avatar Upload -->
+                        <div class="flex items-center gap-4">
+                            <UserAvatar :user="editPreviewUser" size="lg" />
+                            <div class="flex flex-col gap-2">
+                                <input ref="editFileInput" type="file" accept="image/*" class="hidden" @change="onEditAvatarSelected" />
+                                <button type="button" @click="selectEditAvatar" class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
+                                    <Camera class="h-4 w-4" />
+                                    Alterar Foto
+                                </button>
+                                <button v-if="selectedUser?.avatar_url || editAvatarPreview" type="button" @click="removeEditAvatar" class="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm hover:bg-red-50 transition-colors">
+                                    <Trash2 class="h-3.5 w-3.5" />
+                                    Remover Foto
+                                </button>
+                            </div>
+                            <p v-if="editForm.errors.avatar" class="text-sm text-red-500">{{ editForm.errors.avatar }}</p>
+                        </div>
+
                         <div>
                             <label for="edit-name" class="text-sm font-medium text-gray-700">Nome</label>
                             <input
