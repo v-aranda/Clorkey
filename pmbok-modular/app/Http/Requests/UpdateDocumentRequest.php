@@ -17,6 +17,7 @@ class UpdateDocumentRequest extends FormRequest
             'title' => 'sometimes|required|string|max:255',
             'content' => 'nullable|string',
             'css' => 'nullable|string',
+            'exclude_relationship_id' => 'sometimes|nullable|integer|exists:document_relationships,id',
         ];
     }
 }

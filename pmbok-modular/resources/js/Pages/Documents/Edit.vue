@@ -586,6 +586,27 @@ const extractParagraphPreview = (html, paragraphId) => {
     return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 };
 
+const updateParagraphTextInHtml = (html, paragraphId, text) => {
+    if (!html || !paragraphId) return html || '';
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+
+    let target = null;
+    try {
+        target = wrapper.querySelector(`[data-id="${paragraphId}"]`);
+    } catch {
+        target = null;
+    }
+    if (!target) {
+        target = wrapper.querySelector(`[id="${paragraphId}"]`) || wrapper.getElementById?.(paragraphId);
+    }
+    if (!target) return html;
+
+    target.textContent = text;
+    return wrapper.innerHTML;
+};
+
 const normalizeDocumentRelationships = (document) => {
     const list = [];
     if (!document) return list;
@@ -770,6 +791,77 @@ const resolveRelationshipPendency = (rel) => {
         .catch((err) => {
             console.error(err);
             alert('Não foi possível marcar a pendência como revisada.');
+        });
+};
+
+const saveInlineRelationshipEdit = ({ side, text, relationship }) => {
+    if (!relationship?.id || !text) return;
+
+    const isCurrentSide = side === 'current';
+    const documentId = isCurrentSide ? props.document.id : relationship.related_document_id;
+    const paragraphId = isCurrentSide ? relationship.current_paragraph_id : relationship.related_paragraph_id;
+
+    const baseContent = isCurrentSide
+        ? getCurrentContent()
+        : (relationship.related_document_content || '');
+
+    const nextContent = updateParagraphTextInHtml(baseContent, paragraphId, text);
+    if (!nextContent || nextContent === baseContent) return;
+
+    axios.put(route('library.documents.update', documentId), {
+        content: nextContent,
+        exclude_relationship_id: relationship.id,
+    })
+        .then((response) => {
+            const pendingIds = response?.data?.pending_relationship_ids;
+            if (Array.isArray(pendingIds) && pendingIds.length > 0) {
+                const pendingSet = new Set(pendingIds.map(id => Number(id)));
+                relationshipList.value = relationshipList.value.map((rel) => {
+                    if (!pendingSet.has(Number(rel.id))) return rel;
+                    if (Number(rel.id) === Number(relationship.id)) return rel;
+
+                    const syntheticPendency = {
+                        id: `local-${Date.now()}-${rel.id}`,
+                        relationship_id: rel.id,
+                        trigger_document_id: documentId,
+                        trigger_paragraph_id: isCurrentSide ? rel.current_paragraph_id : rel.related_paragraph_id,
+                        reviewed_at: null,
+                    };
+
+                    const currentItems = Array.isArray(rel.pending_items) ? rel.pending_items : [];
+                    const nextItems = [syntheticPendency, ...currentItems];
+                    const active = nextItems[0] || null;
+
+                    return {
+                        ...rel,
+                        is_pending: true,
+                        pending_items: nextItems,
+                        active_pendency_id: active?.id || null,
+                        pending_trigger_document_id: active?.trigger_document_id || null,
+                        pending_trigger_paragraph_id: active?.trigger_paragraph_id || null,
+                    };
+                });
+            }
+
+            if (isCurrentSide) {
+                form.content = nextContent;
+                if (editor.value) {
+                    editor.value.commands.setContent(nextContent, false);
+                }
+            } else {
+                relationshipList.value = relationshipList.value.map((rel) => {
+                    if (Number(rel.id) !== Number(relationship.id)) return rel;
+                    return {
+                        ...rel,
+                        related_document_content: nextContent,
+                        related_paragraph_preview: extractParagraphPreview(nextContent, relationship.related_paragraph_id),
+                    };
+                });
+            }
+        })
+        .catch((err) => {
+            console.error(err);
+            alert('Não foi possível salvar a edição inline.');
         });
 };
 
@@ -1064,7 +1156,7 @@ onBeforeUnmount(() => {
                 :relationships="documentRelationships" :current-document-title="form.title"
                 :current-document-content="getCurrentContent()" @close="closeRelationshipViewer"
                 @select-relationship="selectRelationshipInViewer" @remove-relationship="removeRelationship"
-                @resolve-pendency="resolveRelationshipPendency" />
+                @resolve-pendency="resolveRelationshipPendency" @inline-edit-save="saveInlineRelationshipEdit" />
 
             <DocumentRightPanel ref="rightPanelRef" v-model:show="showRightPanel" :toc-items="tocItems"
                 :version-history="versionHistory"

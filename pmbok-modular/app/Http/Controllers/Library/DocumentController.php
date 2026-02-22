@@ -53,6 +53,7 @@ class DocumentController extends Controller
         $data = [];
         $oldContent = $document->content;
         $pendingRelationshipIds = [];
+        $excludeRelationshipId = $request->integer('exclude_relationship_id') ?: null;
 
         if ($request->has('title')) {
             $data['title'] = $request->title;
@@ -67,7 +68,12 @@ class DocumentController extends Controller
         $document->update($data);
 
         if (array_key_exists('content', $data) && $data['content'] !== $oldContent) {
-            $pendingRelationshipIds = $this->markRelationshipPendenciesForChangedParagraphs($document, $oldContent, $data['content']);
+            $pendingRelationshipIds = $this->markRelationshipPendenciesForChangedParagraphs(
+                $document,
+                $oldContent,
+                $data['content'],
+                $excludeRelationshipId
+            );
         }
 
         if ($request->wantsJson() || $request->ajax() || str_contains($request->header('Accept'), 'application/json')) {
@@ -81,7 +87,12 @@ class DocumentController extends Controller
         return back()->with('success', 'Documento salvo com sucesso.');
     }
 
-    private function markRelationshipPendenciesForChangedParagraphs(Document $document, string $oldContent, string $newContent): array
+    private function markRelationshipPendenciesForChangedParagraphs(
+        Document $document,
+        string $oldContent,
+        string $newContent,
+        ?int $excludeRelationshipId = null
+    ): array
     {
         $trackedParagraphIds = DocumentRelationship::query()
             ->where('source_document_id', $document->id)
@@ -122,6 +133,12 @@ class DocumentController extends Controller
                     ->whereIn('target_paragraph_id', $changedParagraphIdSet);
             })
             ->get(['id', 'source_document_id', 'source_paragraph_id', 'target_document_id', 'target_paragraph_id']);
+
+        if ($excludeRelationshipId) {
+            $affectedRelationships = $affectedRelationships->filter(
+                fn ($relationship) => (int) $relationship->id !== (int) $excludeRelationshipId
+            )->values();
+        }
 
         if ($affectedRelationships->isEmpty()) {
             return [];

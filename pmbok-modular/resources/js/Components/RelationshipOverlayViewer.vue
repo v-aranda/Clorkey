@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
-import { X, Link as LinkIcon, Trash2, CheckCircle2 } from 'lucide-vue-next';
+import { X, Link as LinkIcon, Trash2, CheckCircle2, Pencil, Check, X as XIcon } from 'lucide-vue-next';
 
 const props = defineProps({
     open: {
@@ -25,7 +25,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['close', 'selectRelationship', 'removeRelationship', 'resolvePendency']);
+const emit = defineEmits(['close', 'selectRelationship', 'removeRelationship', 'resolvePendency', 'inlineEditSave']);
 
 const relatedDocumentTitle = computed(() => props.relationship?.related_document_title || 'Documento relacionado');
 const relatedDocumentContent = computed(() => props.relationship?.related_document_content || '');
@@ -77,6 +77,10 @@ const currentScrollRef = ref(null);
 const relatedScrollRef = ref(null);
 const currentResolveStyle = ref(null);
 const relatedResolveStyle = ref(null);
+const currentEditStyle = ref(null);
+const relatedEditStyle = ref(null);
+const editingSide = ref(null); // 'current' | 'related' | null
+const inlineOriginalText = ref('');
 
 const getOffsetWithin = (container, element) => {
     let top = 0;
@@ -114,14 +118,117 @@ const updateResolveButtonPosition = (containerRef, styleRef, shouldShow) => {
     };
 };
 
+const getHighlightedElement = (containerRef) => {
+    if (!containerRef.value) return null;
+    return containerRef.value.querySelector('.relationship-overlay-highlight, .relationship-overlay-highlight-pending');
+};
+
+const updateEditButtonPosition = (containerRef, styleRef, shouldShow) => {
+    if (!shouldShow || !containerRef.value) {
+        styleRef.value = null;
+        return;
+    }
+    const target = getHighlightedElement(containerRef);
+    if (!target) {
+        styleRef.value = null;
+        return;
+    }
+    const { top, left } = getOffsetWithin(containerRef.value, target);
+    styleRef.value = {
+        top: `${top + 6}px`,
+        left: `${left + target.offsetWidth - 6}px`,
+    };
+};
+
+const getContainerRefBySide = (side) => (side === 'current' ? currentScrollRef : relatedScrollRef);
+
+const getEditableElementBySide = (side) => {
+    if (!side) return null;
+    return getHighlightedElement(getContainerRefBySide(side));
+};
+
+const toggleEditableHighlight = (side, editable) => {
+    const target = getEditableElementBySide(side);
+    if (!target) return null;
+    target.setAttribute('contenteditable', editable ? 'true' : 'false');
+    target.classList.toggle('relationship-overlay-highlight-editing', editable);
+    return target;
+};
+
 const updateResolveButtons = () => {
     updateResolveButtonPosition(currentScrollRef, currentResolveStyle, showResolveOnCurrent.value);
     updateResolveButtonPosition(relatedScrollRef, relatedResolveStyle, showResolveOnRelated.value);
+    updateEditButtonPosition(currentScrollRef, currentEditStyle, showResolveOnCurrent.value);
+    updateEditButtonPosition(relatedScrollRef, relatedEditStyle, showResolveOnRelated.value);
+};
+
+const openInlineEditor = (side) => {
+    if (editingSide.value && editingSide.value !== side) {
+        toggleEditableHighlight(editingSide.value, false);
+    }
+
+    const target = toggleEditableHighlight(side, true);
+    if (!target) return;
+
+    editingSide.value = side;
+    inlineOriginalText.value = target.innerText || '';
+
+    nextTick(() => {
+        target.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    });
+};
+
+const finishInlineEdit = (restoreOriginalText = false) => {
+    const side = editingSide.value;
+    if (!side) return;
+
+    const target = getEditableElementBySide(side);
+    if (restoreOriginalText && target) {
+        target.innerText = inlineOriginalText.value;
+    }
+
+    toggleEditableHighlight(side, false);
+    editingSide.value = null;
+    inlineOriginalText.value = '';
+};
+
+const cancelInlineEdit = () => {
+    finishInlineEdit(true);
+};
+
+const submitInlineEdit = () => {
+    const side = editingSide.value;
+    if (!side) return;
+
+    const target = getEditableElementBySide(editingSide.value);
+    if (!target) return;
+
+    const text = (target.innerText || '').trim();
+    if (!text) return;
+
+    emit('inlineEditSave', {
+        side,
+        text,
+        relationship: props.relationship,
+    });
+
+    finishInlineEdit(false);
 };
 
 watch(
     () => [props.open, props.relationship?.id, highlightedCurrentContent.value, highlightedRelatedContent.value],
     async () => {
+        if (editingSide.value) {
+            toggleEditableHighlight(editingSide.value, false);
+            editingSide.value = null;
+            inlineOriginalText.value = '';
+        }
         await nextTick();
         updateResolveButtons();
     }
@@ -159,9 +266,30 @@ onBeforeUnmount(() => {
                                         <span class="text-sm font-semibold truncate">{{ currentDocumentTitle }}</span>
                                     </div>
                                 </div>
-                                <div ref="currentScrollRef" class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
+                                <div ref="currentScrollRef" @scroll="updateResolveButtons"
+                                    class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
                                     <div class="a4-page !min-h-0 !w-full !max-w-none shadow-sm">
                                         <div class="tiptap version-readonly" v-html="highlightedCurrentContent" />
+                                    </div>
+                                    <div v-if="showResolveOnCurrent && currentEditStyle && (!editingSide || editingSide === 'current')"
+                                        class="relationship-edit-actions absolute" :style="currentEditStyle">
+                                        <button v-if="editingSide !== 'current'" @click.stop="openInlineEditor('current')"
+                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-violet-700 border border-violet-200 shadow-sm transition-colors"
+                                            title="Editar parágrafo">
+                                            <Pencil class="w-3.5 h-3.5" />
+                                        </button>
+                                        <template v-else>
+                                            <button @click.stop="cancelInlineEdit"
+                                                class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-gray-600 border border-gray-200 shadow-sm transition-colors"
+                                                title="Cancelar edição">
+                                                <XIcon class="w-3.5 h-3.5" />
+                                            </button>
+                                            <button @click.stop="submitInlineEdit"
+                                                class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-600 shadow-sm transition-colors"
+                                                title="Salvar edição">
+                                                <Check class="w-3.5 h-3.5" />
+                                            </button>
+                                        </template>
                                     </div>
                                     <button v-if="showResolveOnCurrent && currentResolveStyle" @click.stop="emit('resolvePendency', relationship)"
                                         class="relationship-resolve-btn absolute inline-flex items-center gap-1 rounded-md bg-amber-400 hover:bg-emerald-500 hover:text-white text-amber-950 text-xs font-semibold px-2 py-1 transition-colors shadow-md"
@@ -182,9 +310,30 @@ onBeforeUnmount(() => {
                                         <span class="text-sm font-semibold truncate">{{ relatedDocumentTitle }}</span>
                                     </div>
                                 </div>
-                                <div ref="relatedScrollRef" class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
+                                <div ref="relatedScrollRef" @scroll="updateResolveButtons"
+                                    class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
                                     <div class="a4-page !min-h-0 !w-full !max-w-none shadow-sm">
                                         <div class="tiptap version-readonly" v-html="highlightedRelatedContent" />
+                                    </div>
+                                    <div v-if="showResolveOnRelated && relatedEditStyle && (!editingSide || editingSide === 'related')"
+                                        class="relationship-edit-actions absolute" :style="relatedEditStyle">
+                                        <button v-if="editingSide !== 'related'" @click.stop="openInlineEditor('related')"
+                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-violet-700 border border-violet-200 shadow-sm transition-colors"
+                                            title="Editar parágrafo">
+                                            <Pencil class="w-3.5 h-3.5" />
+                                        </button>
+                                        <template v-else>
+                                            <button @click.stop="cancelInlineEdit"
+                                                class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-gray-600 border border-gray-200 shadow-sm transition-colors"
+                                                title="Cancelar edição">
+                                                <XIcon class="w-3.5 h-3.5" />
+                                            </button>
+                                            <button @click.stop="submitInlineEdit"
+                                                class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-600 shadow-sm transition-colors"
+                                                title="Salvar edição">
+                                                <Check class="w-3.5 h-3.5" />
+                                            </button>
+                                        </template>
                                     </div>
                                     <button v-if="showResolveOnRelated && relatedResolveStyle" @click.stop="emit('resolvePendency', relationship)"
                                         class="relationship-resolve-btn absolute inline-flex items-center gap-1 rounded-md bg-amber-400 hover:bg-emerald-500 hover:text-white text-amber-950 text-xs font-semibold px-2 py-1 transition-colors shadow-md"
@@ -240,6 +389,7 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
                     </aside>
+
                 </div>
             </div>
         </Transition>
@@ -345,8 +495,27 @@ onBeforeUnmount(() => {
     border-radius: 4px;
 }
 
+.relationship-overlay-viewer .tiptap .relationship-overlay-highlight-editing {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.55) inset;
+    cursor: text;
+}
+
 .relationship-overlay-viewer .relationship-resolve-btn {
     transform: translateX(calc(-100% + 8px));
     z-index: 5;
+}
+
+.relationship-overlay-viewer .relationship-edit-actions {
+    transform: translateX(calc(-100% + 6px));
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 7;
+}
+
+.relationship-overlay-viewer .relationship-edit-btn {
+    width: 26px;
+    height: 26px;
+    z-index: 6;
 }
 </style>
