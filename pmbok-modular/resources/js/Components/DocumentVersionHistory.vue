@@ -10,13 +10,9 @@
             </button>
         </div>
         <div v-else class="flex flex-col gap-1.5">
-            <input
-                v-model="newVersionLabel"
-                placeholder="Nome da versão (opcional)"
+            <input v-model="newVersionLabel" placeholder="Nome da versão (opcional)"
                 class="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 w-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                @keydown.enter="confirmSave"
-                @keydown.escape="showSaveInput = false; newVersionLabel = ''"
-            />
+                @keydown.enter="confirmSave" @keydown.escape="showSaveInput = false; newVersionLabel = ''" />
             <div class="flex gap-1.5">
                 <button @click="confirmSave"
                     class="flex-1 px-2 py-1 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-md transition-colors">
@@ -35,11 +31,9 @@
         </div>
 
         <ul v-else class="flex flex-col gap-1 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
-            <li v-for="version in versions" :key="version.id"
-                @click="$emit('open-version-modal', version)"
-                :class="activeVersionId === version.id
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'"
+            <li v-for="version in versions" :key="version.id" @click="$emit('open-version-modal', version)" :class="activeVersionId === version.id
+                ? 'border-primary/40 bg-primary/5'
+                : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'"
                 class="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors">
                 <div class="flex flex-col min-w-0 flex-1">
                     <span class="text-xs font-medium text-gray-700 truncate">
@@ -50,6 +44,11 @@
                         <template v-if="version.created_at"> · {{ formatDate(version.created_at) }}</template>
                     </span>
                 </div>
+                <button @click.stop="$emit('export-version', version)"
+                    class="flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                    title="Exportar PDF">
+                    <Download class="w-3.5 h-3.5" />
+                </button>
                 <button @click.stop="openDelete(version)"
                     class="flex-shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                     title="Excluir versão">
@@ -77,7 +76,7 @@
 
 <script setup>
 import { ref } from 'vue';
-import { Plus, Trash2 } from 'lucide-vue-next';
+import { Plus, Trash2, Download } from 'lucide-vue-next';
 import Dialog from '@/Components/ui/Dialog.vue';
 import Button from '@/Components/ui/Button.vue';
 
@@ -86,7 +85,7 @@ const props = defineProps({
     activeVersionId: { type: Number, default: null },
 });
 
-const emit = defineEmits(['open-version-modal', 'save-version', 'delete-version']);
+const emit = defineEmits(['open-version-modal', 'save-version', 'delete-version', 'export-version']);
 
 const showSaveInput = ref(false);
 const newVersionLabel = ref('');

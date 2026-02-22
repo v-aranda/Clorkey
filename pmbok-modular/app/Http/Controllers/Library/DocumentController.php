@@ -60,11 +60,29 @@ class DocumentController extends Controller
         return back()->with('success', 'Documento salvo com sucesso.');
     }
 
-    public function download(Document $document)
+    public function download(Request $request, Document $document)
     {
-        $html = '<html><head><style>' . $document->css . '</style></head><body>' . $document->content . '</body></html>';
+        $content = $document->content;
+        $title = $document->title;
+
+        if ($request->has('version_id')) {
+            $version = $document->versions()->findOrFail($request->version_id);
+            $content = $version->content;
+            if ($version->label) {
+                $title .= ' - ' . $version->label;
+            } else {
+                $title .= ' - Versão ' . $version->created_at->format('Y-m-d_H-i');
+            }
+        }
+
+        $tableCss = "
+            table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; }
+            table, th, td { border: 1px solid black; padding: 0.5rem; }
+        ";
+
+        $html = '<html><head><style>' . $document->css . $tableCss . '</style></head><body>' . $content . '</body></html>';
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
-        return $pdf->download($document->title . '.pdf');
+        return $pdf->download($title . '.pdf');
     }
 
     public function versions(Document $document)

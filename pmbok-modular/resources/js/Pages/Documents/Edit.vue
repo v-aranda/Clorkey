@@ -26,7 +26,7 @@ import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
     Menu, X, ListTree, History, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
-    Link2Off, ExternalLink
+    Link2Off, ExternalLink, Download
 } from 'lucide-vue-next';
 import axios from 'axios';
 import DiffMatchPatch from 'diff-match-patch';
@@ -427,6 +427,14 @@ const goBack = () => {
     }
 };
 
+const exportToPdf = (versionId = null) => {
+    let url = route('library.documents.download', props.document.id);
+    if (versionId) {
+        url += `?version_id=${versionId}`;
+    }
+    window.open(url, '_blank');
+};
+
 // Table Context Menu Logic
 const tableContextMenu = ref({ show: false, x: 0, y: 0 });
 
@@ -493,6 +501,12 @@ onBeforeUnmount(() => {
                         placeholder="Título do Documento" />
                 </div>
                 <div class="flex items-center gap-4">
+                    <button @click="exportToPdf()"
+                        class="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+                        title="Exportar PDF">
+                        <Download class="w-4 h-4" />
+                        <span class="hidden sm:inline">Exportar PDF</span>
+                    </button>
                     <button @click="saveDocument"
                         class="flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
                         :class="{
@@ -613,7 +627,7 @@ onBeforeUnmount(() => {
                     <div v-else-if="tocTab === 'history'">
                         <DocumentVersionHistory :versions="versionHistory" :active-version-id="versionModal.version?.id"
                             @open-version-modal="openVersionModal" @save-version="saveVersion"
-                            @delete-version="deleteVersion" />
+                            @delete-version="deleteVersion" @export-version="v => exportToPdf(v.id)" />
                     </div>
                 </div>
             </div>
