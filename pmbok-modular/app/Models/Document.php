@@ -32,4 +32,9 @@ class Document extends Model
     {
         return $this->hasMany(DocumentLink::class)->orderBy('position');
     }
+
+    public function versions()
+    {
+        return $this->hasMany(DocumentVersion::class);
+    }
 }

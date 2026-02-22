@@ -2,9 +2,9 @@
 import { ref } from 'vue';
 import {
     Undo, Redo, Bold, Italic, Strikethrough, Eraser,
-    Heading1, Heading2, Heading3, Type, List, ListOrdered, Quote,
-    Baseline, Highlighter, AlignLeft, AlignCenter, AlignRight, AlignJustify, ChevronDown,
-    Table as TableIcon, Trash2, Columns, Rows, Plus, Minus, PaintBucket, Square,
+    Heading1, Heading2, Heading3, List, ListOrdered, Quote,
+    Baseline, Highlighter, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+    Table as TableIcon, Trash2, Columns, Rows, Plus, Minus, PaintBucket,
     Combine, SplitSquareHorizontal,
     Link2, ListTodo, Paintbrush, Code, Minus as MinusIcon, ImageIcon, MoreHorizontal
 } from 'lucide-vue-next';
@@ -463,18 +463,6 @@ const cycleList = () => {
                             <input type="color"
                                 @input="editor.chain().focus().setCellAttribute('backgroundColor', $event.target.value).run()"
                                 :value="editor.getAttributes('tableCell').backgroundColor || '#ffffff'"
-                                class="opacity-0 absolute inset-0 w-full h-full cursor-pointer" />
-                        </div>
-                        <!-- Table Border Color -->
-                        <div class="relative flex items-center justify-center w-full h-8 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                            title="Cor da Borda">
-                            <Square class="w-4 h-4 text-gray-500 pointer-events-none" />
-                            <div class="w-4 h-[3px] absolute bottom-[5px] rounded-full pointer-events-none"
-                                :style="{ backgroundColor: editor.getAttributes('table').borderColor || '#ced4da' }">
-                            </div>
-                            <input type="color"
-                                @input="editor.chain().focus().updateAttributes('table', { borderColor: $event.target.value }).run()"
-                                :value="editor.getAttributes('table').borderColor || '#ced4da'"
                                 class="opacity-0 absolute inset-0 w-full h-full cursor-pointer" />
                         </div>
                     </div>

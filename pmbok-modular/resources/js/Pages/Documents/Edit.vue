@@ -21,13 +21,15 @@ import { common, createLowlight } from 'lowlight';
 import Image from '@tiptap/extension-image';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import EditorToolbar from '@/Components/EditorToolbar.vue';
+import DocumentVersionHistory from '@/Components/DocumentVersionHistory.vue';
 import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
-    Menu, X,
+    Menu, X, ListTree, History, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
     Link2Off, ExternalLink
 } from 'lucide-vue-next';
 import axios from 'axios';
+import DiffMatchPatch from 'diff-match-patch';
 
 const CustomTableCell = TableCell.extend({
     addAttributes() {
@@ -79,13 +81,25 @@ const CustomTable = Table.extend({
                 default: null,
                 parseHTML: element => element.getAttribute('data-border-color'),
                 renderHTML: attributes => {
-                    if (!attributes.borderColor) {
-                        return {}
-                    }
+                    if (!attributes.borderColor) return {};
                     return {
                         'data-border-color': attributes.borderColor,
                         style: `--table-border-color: ${attributes.borderColor};`,
-                    }
+                    };
+                },
+            },
+            borderWidth: {
+                default: 1,
+                parseHTML: element => {
+                    const val = element.getAttribute('data-border-width');
+                    return val !== null ? Math.max(0, Number(val)) : 1;
+                },
+                renderHTML: attributes => {
+                    const bw = Math.max(0, Number(attributes.borderWidth ?? 1));
+                    return {
+                        'data-border-width': bw,
+                        style: `--table-border-width: ${bw}px;`,
+                    };
                 },
             },
         }
@@ -238,6 +252,135 @@ onBeforeUnmount(() => {
 // Table of Contents logic
 const tocItems = ref([]);
 const showToc = ref(true);
+const tocTab = ref('index');
+const versionHistory = ref([]);
+
+async function loadVersions() {
+    try {
+        const { data } = await axios.get(route('library.documents.versions', props.document.id));
+        versionHistory.value = data;
+    } catch {
+        // silently ignore
+    }
+}
+
+async function saveVersion(label) {
+    try {
+        const { data } = await axios.post(route('library.documents.versions.store', props.document.id), { label });
+        versionHistory.value.unshift(data);
+    } catch {
+        // silently ignore
+    }
+}
+
+async function loadVersionContent(version) {
+    const { data } = await axios.get(route('library.documents.versions.show', [props.document.id, version.id]));
+    return data.content;
+}
+
+async function deleteVersion(version) {
+    await axios.delete(route('library.documents.versions.destroy', [props.document.id, version.id]));
+    versionHistory.value = versionHistory.value.filter(v => v.id !== version.id);
+    if (versionModal.value.version?.id === version.id) {
+        closeVersionModal();
+    }
+}
+
+function getCurrentContent() {
+    return editor.value ? editor.value.getHTML() : form.content;
+}
+
+// --- Version Modal ---
+
+function stripHtml(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.innerText || div.textContent || '';
+}
+
+function buildDiff(oldHtml, newHtml) {
+    const dmp = new DiffMatchPatch();
+
+    function tokenize(text) {
+        return text.match(/(<[^>]+>)|(\s+)|([^<\s]+)/g) || [];
+    }
+
+    const wordToChar = new Map();
+    let nextChar = 0x100;
+
+    function mapTokens(tokens) {
+        return tokens.map(token => {
+            if (!wordToChar.has(token)) {
+                wordToChar.set(token, String.fromCodePoint(nextChar++));
+            }
+            return wordToChar.get(token);
+        }).join('');
+    }
+
+    const chars1 = mapTokens(tokenize(oldHtml || ''));
+    const chars2 = mapTokens(tokenize(newHtml || ''));
+    const charToWord = new Map([...wordToChar.entries()].map(([k, v]) => [v, k]));
+
+    const diffs = dmp.diff_main(chars1, chars2, false);
+    dmp.diff_cleanupSemantic(diffs);
+
+    return diffs.map(([op, chars]) => {
+        const word = [...chars].map(c => charToWord.get(c) ?? c).join('');
+        const tokens = word.match(/(<[^>]+>)|([^<]+)/g) || [];
+
+        return tokens.map(token => {
+            if (token.startsWith('<') && token.endsWith('>')) {
+                return token; // Preserve HTML tags without wrapping
+            }
+
+            if (op === -1) return `<span class="version-diff-del">${token}</span>`;
+            if (op === 1) return `<span class="version-diff-ins">${token}</span>`;
+            return token;
+        }).join('');
+    }).join('');
+}
+
+function formatVersionDate(dateStr) {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+    });
+}
+
+const versionModal = ref({
+    open: false,
+    version: null,
+    content: '',
+    diffContent: '',
+    showDiff: true,
+    loading: false,
+});
+
+async function openVersionModal(version) {
+    versionModal.value.open = true;
+    versionModal.value.version = version;
+    versionModal.value.content = '';
+    versionModal.value.diffContent = '';
+    versionModal.value.loading = true;
+
+    const selectedHtml = await loadVersionContent(version);
+    versionModal.value.content = selectedHtml;
+
+    const idx = versionHistory.value.findIndex(v => v.id === version.id);
+    const newerVersion = idx === 0 ? null : versionHistory.value[idx - 1];
+    const newerHtml = newerVersion
+        ? await loadVersionContent(newerVersion)
+        : editor.value.getHTML();
+
+    versionModal.value.diffContent = buildDiff(selectedHtml, newerHtml);
+    versionModal.value.loading = false;
+}
+
+function closeVersionModal() {
+    versionModal.value.open = false;
+    versionModal.value.version = null;
+}
 
 const generateToc = () => {
     if (!editor.value) return;
@@ -327,6 +470,7 @@ const closeContextMenu = () => {
 
 onMounted(() => {
     window.addEventListener('click', closeContextMenu);
+    loadVersions();
 });
 onBeforeUnmount(() => {
     window.removeEventListener('click', closeContextMenu);
@@ -372,80 +516,140 @@ onBeforeUnmount(() => {
         </template>
 
         <div class="flex flex-col md:flex-row w-full max-w-[1600px] mx-auto justify-between items-start relative gap-0">
-            
+
             <!-- Left Toolbar Dock -->
             <EditorToolbar v-if="editor" :editor="editor" @open-link-modal="openLinkModal" />
             <!-- Editor Content -->
-            <div class="flex-1 min-w-0 overflow-y-auto bg-gray-100" style="min-height: calc(100vh - 65px);">
+            <div class="flex-1 min-w-0 overflow-y-auto bg-gray-100 relative" style="min-height: calc(100vh - 65px);">
                 <div class="py-10 flex justify-center">
                     <div class="a4-page" @contextmenu="handleContextMenu">
                         <editor-content :editor="editor" />
                     </div>
                 </div>
+
+                <!-- Version Modal Overlay -->
+                <div v-if="versionModal.open"
+                    class="absolute inset-2 z-20 bg-gray-100 rounded-2xl overflow-hidden shadow-xl ring-1 ring-black/5 flex flex-col">
+                    <!-- Control bar -->
+                    <div
+                        class="sticky top-0 z-10 bg-violet-700 flex items-center gap-3 px-4 py-2 shadow-md flex-shrink-0">
+                        <button @click="closeVersionModal"
+                            class="flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors">
+                            <X class="w-4 h-4" /> Fechar
+                        </button>
+                        <div class="h-4 w-px bg-white/25 flex-shrink-0" />
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-sm font-semibold text-white truncate">
+                                {{ versionModal.version?.label || 'Sem nome' }}
+                            </span>
+                            <span class="text-xs text-violet-200">
+                                {{ versionModal.version?.user?.name }}
+                                <template v-if="versionModal.version?.created_at">
+                                    · {{ formatVersionDate(versionModal.version.created_at) }}
+                                </template>
+                            </span>
+                        </div>
+                        <button @click="versionModal.showDiff = !versionModal.showDiff" :class="versionModal.showDiff
+                            ? 'bg-white/20 text-white hover:bg-white/30 ring-1 ring-white/30'
+                            : 'bg-white/10 text-white/70 hover:bg-white/20'"
+                            class="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0">
+                            <GitCompare class="w-4 h-4" />
+                            {{ versionModal.showDiff ? 'Versão limpa' : 'Ver mudanças' }}
+                        </button>
+                    </div>
+
+                    <!-- A4 Content -->
+                    <div class="flex-1 overflow-y-auto py-10 flex justify-center">
+                        <div v-if="versionModal.loading" class="text-gray-400 text-sm mt-20">Carregando...</div>
+                        <div v-else class="a4-page">
+                            <div v-if="!versionModal.showDiff" class="tiptap version-readonly"
+                                v-html="versionModal.content" />
+                            <div v-else class="tiptap version-diff" v-html="versionModal.diffContent" />
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-<!-- Table of Contents Sidebar -->
+
+            <!-- Table of Contents Sidebar -->
             <div :class="[
                 'transition-all duration-300 ease-in-out border-l bg-gray-50/50 min-h-[calc(100vh-65px)] sticky top-0 self-start',
                 showToc ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden border-l-0'
             ]">
                 <div class="p-4 sticky top-4 w-64" v-if="showToc">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Índice</h3>
+                    <div class="flex items-center gap-1 mb-4">
+                        <button @click="tocTab = 'index'"
+                            :class="['p-2 rounded-md transition', tocTab === 'index' ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700']"
+                            title="Índice">
+                            <ListTree class="w-4 h-4" />
+                        </button>
+                        <button @click="tocTab = 'history'"
+                            :class="['p-2 rounded-md transition', tocTab === 'history' ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700']"
+                            title="Histórico de Versões">
+                            <History class="w-4 h-4" />
+                        </button>
                         <button @click="toggleToc"
-                            class="p-1 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                            title="Fechar Índice">
+                            class="ml-auto p-2 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                            title="Fechar">
                             <X class="w-4 h-4" />
                         </button>
                     </div>
-
-                    <div v-if="tocItems.length === 0" class="text-sm text-gray-400 italic">
-                        Nenhum título no documento. Adicione títulos (H1, H2, H3) para vê-los aqui.
+                    <div v-if="tocTab === 'index'">
+                        <div v-if="tocItems.length === 0" class="text-sm text-gray-400 italic">
+                            Nenhum título no documento. Adicione títulos (H1, H2, H3) para vê-los aqui.
+                        </div>
+                        <ul v-else class="space-y-1.5 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
+                            <li v-for="item in tocItems" :key="item.id">
+                                <button @click="scrollToHeading(item.id)" :class="[
+                                    'text-left w-full text-sm hover:text-primary hover:bg-primary/5 transition-colors px-2 py-1 rounded line-clamp-2',
+                                    item.level === 1 ? 'font-semibold text-gray-800' : '',
+                                    item.level === 2 ? 'font-medium text-gray-600 pl-4' : '',
+                                    item.level === 3 ? 'text-gray-500 pl-8 text-xs' : ''
+                                ]" :title="item.text">
+                                    {{ item.text }}
+                                </button>
+                            </li>
+                        </ul>
                     </div>
-
-                    <ul v-else class="space-y-1.5 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
-                        <li v-for="item in tocItems" :key="item.id">
-                            <button @click="scrollToHeading(item.id)" :class="[
-                                'text-left w-full text-sm hover:text-primary hover:bg-primary/5 transition-colors px-2 py-1 rounded line-clamp-2',
-                                item.level === 1 ? 'font-semibold text-gray-800' : '',
-                                item.level === 2 ? 'font-medium text-gray-600 pl-4' : '',
-                                item.level === 3 ? 'text-gray-500 pl-8 text-xs' : ''
-                            ]" :title="item.text">
-                                {{ item.text }}
-                            </button>
-                        </li>
-                    </ul>
+                    <div v-else-if="tocTab === 'history'">
+                        <DocumentVersionHistory :versions="versionHistory" :active-version-id="versionModal.version?.id"
+                            @open-version-modal="openVersionModal" @save-version="saveVersion"
+                            @delete-version="deleteVersion" />
+                    </div>
                 </div>
             </div>
 
-            
+
         </div>
 
-<!-- Floating Toggle TOC Button (visible when TOC is hidden) -->
-                <button v-if="!showToc" @click="toggleToc"
-                    class="fixed right-6 top-24 z-20 p-2 bg-white rounded-full shadow-[0_4px_10px_-1px_rgba(0,0,0,0.1)] border hover:bg-gray-50 hover:text-primary transition text-gray-400"
-                    title="Mostrar Índice">
-                    <Menu class="w-5 h-5" />
-                </button>
+        <!-- Floating Toggle TOC Button (visible when TOC is hidden) -->
+        <button v-if="!showToc" @click="toggleToc"
+            class="fixed right-6 top-24 z-20 p-2 bg-white rounded-full shadow-[0_4px_10px_-1px_rgba(0,0,0,0.1)] border hover:bg-gray-50 hover:text-primary transition text-gray-400"
+            title="Mostrar Índice">
+            <Menu class="w-5 h-5" />
+        </button>
 
         <!-- Link Modal -->
         <Teleport to="body">
-            <div v-if="showLinkModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/30" @click.self="showLinkModal = false">
+            <div v-if="showLinkModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/30"
+                @click.self="showLinkModal = false">
                 <div class="bg-white rounded-xl shadow-2xl w-96 p-5" @click.stop>
                     <h3 class="text-sm font-semibold text-gray-700 mb-3">Inserir Link</h3>
-                    <div class="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+                    <div
+                        class="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
                         <ExternalLink class="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <input v-model="linkUrl" @keydown.enter="setLink()"
-                            placeholder="https://exemplo.com"
+                        <input v-model="linkUrl" @keydown.enter="setLink()" placeholder="https://exemplo.com"
                             class="flex-1 text-sm border-none outline-none focus:ring-0 p-0 bg-transparent" autofocus />
                     </div>
                     <div class="flex justify-end gap-2 mt-4">
-                        <button v-if="editor.isActive('link')" @click="editor.chain().focus().unsetLink().run(); showLinkModal = false"
+                        <button v-if="editor.isActive('link')"
+                            @click="editor.chain().focus().unsetLink().run(); showLinkModal = false"
                             class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5">
                             <Link2Off class="w-3.5 h-3.5" /> Remover
                         </button>
-                        <button @click="showLinkModal = false" class="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                        <button @click="setLink()" class="px-4 py-1.5 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors">Salvar</button>
+                        <button @click="showLinkModal = false"
+                            class="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                        <button @click="setLink()"
+                            class="px-4 py-1.5 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors">Salvar</button>
                     </div>
                 </div>
             </div>
@@ -463,7 +667,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 transition w-full text-left">
                     <div class="relative">
                         <Columns class="w-4 h-4 text-emerald-600" />
-                        <Plus class="w-3 h-3 absolute -bottom-1 -right-1 text-emerald-700 bg-white rounded-full bg-opacity-80" />
+                        <Plus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-emerald-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Inserir Antes
                 </button>
@@ -471,7 +676,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 transition w-full text-left">
                     <div class="relative">
                         <Columns class="w-4 h-4 text-emerald-600" />
-                        <Plus class="w-3 h-3 absolute -bottom-1 -right-1 text-emerald-700 bg-white rounded-full bg-opacity-80" />
+                        <Plus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-emerald-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Inserir Depois
                 </button>
@@ -479,7 +685,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 transition w-full text-left">
                     <div class="relative">
                         <Columns class="w-4 h-4 text-red-500" />
-                        <Minus class="w-3 h-3 absolute -bottom-1 -right-1 text-red-700 bg-white rounded-full bg-opacity-80" />
+                        <Minus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-red-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Excluir Coluna
                 </button>
@@ -492,7 +699,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 transition w-full text-left">
                     <div class="relative">
                         <Rows class="w-4 h-4 text-blue-600" />
-                        <Plus class="w-3 h-3 absolute -bottom-1 -right-1 text-blue-700 bg-white rounded-full bg-opacity-80" />
+                        <Plus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-blue-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Inserir Acima
                 </button>
@@ -500,7 +708,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 transition w-full text-left">
                     <div class="relative">
                         <Rows class="w-4 h-4 text-blue-600" />
-                        <Plus class="w-3 h-3 absolute -bottom-1 -right-1 text-blue-700 bg-white rounded-full bg-opacity-80" />
+                        <Plus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-blue-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Inserir Abaixo
                 </button>
@@ -508,7 +717,8 @@ onBeforeUnmount(() => {
                     class="flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 transition w-full text-left">
                     <div class="relative">
                         <Rows class="w-4 h-4 text-red-500" />
-                        <Minus class="w-3 h-3 absolute -bottom-1 -right-1 text-red-700 bg-white rounded-full bg-opacity-80" />
+                        <Minus
+                            class="w-3 h-3 absolute -bottom-1 -right-1 text-red-700 bg-white rounded-full bg-opacity-80" />
                     </div>
                     Excluir Linha
                 </button>
@@ -544,7 +754,7 @@ onBeforeUnmount(() => {
     color: #1a1a1a;
 }
 
-.a4-page .tiptap > *:first-child {
+.a4-page .tiptap>*:first-child {
     margin-top: 0;
 }
 
@@ -781,12 +991,12 @@ onBeforeUnmount(() => {
     margin: 0.25em 0;
 }
 
-.a4-page .tiptap ul[data-type="taskList"] li > label {
+.a4-page .tiptap ul[data-type="taskList"] li>label {
     flex-shrink: 0;
     margin-top: 0.25em;
 }
 
-.a4-page .tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
+.a4-page .tiptap ul[data-type="taskList"] li>label input[type="checkbox"] {
     width: 16px;
     height: 16px;
     accent-color: #6366f1;
@@ -794,12 +1004,12 @@ onBeforeUnmount(() => {
     border-radius: 3px;
 }
 
-.a4-page .tiptap ul[data-type="taskList"] li > div {
+.a4-page .tiptap ul[data-type="taskList"] li>div {
     flex: 1;
     min-width: 0;
 }
 
-.a4-page .tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+.a4-page .tiptap ul[data-type="taskList"] li[data-checked="true"]>div {
     text-decoration: line-through;
     color: #9ca3af;
 }
@@ -855,7 +1065,7 @@ onBeforeUnmount(() => {
 .tiptap table td,
 .tiptap table th {
     min-width: 1em;
-    border: 1px solid var(--table-border-color, #ced4da);
+    border: var(--table-border-width, 1px) solid var(--table-border-color, #ced4da);
     padding: 3px 5px;
     vertical-align: top;
     box-sizing: border-box;
@@ -889,5 +1099,37 @@ onBeforeUnmount(() => {
     width: 4px;
     background-color: #adf;
     pointer-events: none;
+}
+
+/* Version modal */
+.version-diff-del {
+    background-color: #fee2e2;
+    color: #991b1b;
+    text-decoration: line-through;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.version-diff-ins {
+    background-color: #dcfce7;
+    color: #166534;
+    text-decoration: underline;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.version-readonly {
+    pointer-events: none;
+    user-select: text;
+}
+
+.version-diff {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 11pt;
+    line-height: 1.8;
+    color: #1a1a1a;
+    min-height: calc(297mm - 50mm);
+    user-select: text;
 }
 </style>

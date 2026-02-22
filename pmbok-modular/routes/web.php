@@ -49,6 +49,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/library/documents/{document}/download', [\App\Http\Controllers\Library\DocumentController::class, 'download'])->name('library.documents.download');
     Route::put('/library/documents/{document}', [\App\Http\Controllers\Library\DocumentController::class, 'update'])->name('library.documents.update');
     Route::delete('/library/documents/{document}', [\App\Http\Controllers\Library\DocumentController::class, 'destroy'])->name('library.documents.destroy');
+    // Document Versions
+    Route::get('/library/documents/{document}/versions', [\App\Http\Controllers\Library\DocumentController::class, 'versions'])->name('library.documents.versions');
+    Route::post('/library/documents/{document}/versions', [\App\Http\Controllers\Library\DocumentController::class, 'storeVersion'])->name('library.documents.versions.store');
+    Route::get('/library/documents/{document}/versions/{version}', [\App\Http\Controllers\Library\DocumentController::class, 'showVersion'])->name('library.documents.versions.show');
+    Route::delete('/library/documents/{document}/versions/{version}', [\App\Http\Controllers\Library\DocumentController::class, 'destroyVersion'])->name('library.documents.versions.destroy');
 });
 
 Route::middleware('auth')->group(function () {
