@@ -206,7 +206,12 @@ defineExpose({
                         <template v-if="currentGroup">
                             <div v-for="rel in currentGroup.relationships" :key="rel.id"
                                 @click="emit('openRelationshipViewer', rel)"
-                                class="bg-white border rounded-lg p-3 shadow-sm relative group hover:border-violet-300 transition-colors cursor-pointer">
+                                :class="[
+                                    'rounded-lg p-3 shadow-sm relative group transition-colors cursor-pointer border',
+                                    rel.is_pending
+                                        ? 'bg-amber-50 border-amber-300 hover:border-amber-400'
+                                        : 'bg-white border-gray-200 hover:border-violet-300'
+                                ]">
 
                                 <div
                                     class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -239,6 +244,9 @@ defineExpose({
                                        
                                     </div>
                                 </div>
+                                <span v-if="rel.is_pending"
+                                    class="absolute bottom-2 right-2 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200"
+                                    title="Relacionamento pendente de revisão" />
                             </div>
                         </template>
                     </div>

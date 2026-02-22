@@ -59,6 +59,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Document Relationships
     Route::post('/library/documents/{document}/relationships', [\App\Http\Controllers\Library\DocumentRelationshipController::class, 'store'])->name('library.documents.relationships.store');
     Route::delete('/library/documents/{document}/relationships/{relationship}', [\App\Http\Controllers\Library\DocumentRelationshipController::class, 'destroy'])->name('library.documents.relationships.destroy');
+    Route::post('/library/documents/{document}/relationships/{relationship}/resolve-pendency', [\App\Http\Controllers\Library\DocumentRelationshipController::class, 'resolvePendency'])->name('library.documents.relationships.resolve-pendency');
 });
 
 Route::middleware('auth')->group(function () {
@@ -74,6 +75,5 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 });
 
 require __DIR__ . '/auth.php';
-
 
 

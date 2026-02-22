@@ -130,11 +130,47 @@ const saveDocument = async () => {
     isSaving.value = true;
 
     try {
-        await axios.put(route('library.documents.update', props.document.id), {
+        const response = await axios.put(route('library.documents.update', props.document.id), {
             title: form.title,
             content: form.content,
             css: form.css
         });
+
+        const pendingIds = response?.data?.pending_relationship_ids;
+        if (Array.isArray(pendingIds) && pendingIds.length > 0) {
+            const pendingSet = new Set(pendingIds.map(id => Number(id)));
+            relationshipList.value = relationshipList.value.map((rel) => {
+                if (!pendingSet.has(Number(rel.id))) return rel;
+
+                const syntheticPendency = {
+                    id: `local-${Date.now()}-${rel.id}`,
+                    relationship_id: rel.id,
+                    trigger_document_id: props.document.id,
+                    trigger_paragraph_id: rel.current_paragraph_id,
+                    reviewed_at: null,
+                };
+
+                const currentItems = Array.isArray(rel.pending_items) ? rel.pending_items : [];
+                const alreadyOpen = currentItems.some((item) =>
+                    Number(item.trigger_document_id) === Number(props.document.id)
+                    && String(item.trigger_paragraph_id) === String(rel.current_paragraph_id)
+                    && !item.reviewed_at
+                );
+
+                const nextItems = alreadyOpen ? currentItems : [syntheticPendency, ...currentItems];
+                const active = nextItems[0] || null;
+
+                return {
+                    ...rel,
+                    is_pending: nextItems.length > 0,
+                    pending_items: nextItems,
+                    active_pendency_id: active?.id || null,
+                    pending_trigger_document_id: active?.trigger_document_id || null,
+                    pending_trigger_paragraph_id: active?.trigger_paragraph_id || null,
+                };
+            });
+        }
+
         saveStatus.value = 'saved';
     } catch (error) {
         saveStatus.value = 'error';
@@ -523,7 +559,7 @@ const activeRelationshipView = ref(null);
 
 // Relationship Selection State
 const selectedParagraphCurrent = ref(null); // ID of the selected paragraph in the current document
-const selectedParagraphRelated = ref(null); // ID of the selected paragraph in the related document
+const selectedParagraphRelated = ref([]); // IDs no documento relacionado (seleção múltipla)
 
 const extractParagraphPreview = (html, paragraphId) => {
     if (!html || !paragraphId) return '';
@@ -557,6 +593,11 @@ const normalizeDocumentRelationships = (document) => {
     // sourceRelationships (current is source, related is target)
     if (document.source_relationships) {
         document.source_relationships.forEach(rel => {
+            const pendingItems = (rel.pendencies || [])
+                .filter(item => !item.reviewed_at)
+                .sort((a, b) => Number(b.id) - Number(a.id));
+            const activePendency = pendingItems[0] || null;
+
             list.push({
                 ...rel,
                 is_source: true,
@@ -565,6 +606,11 @@ const normalizeDocumentRelationships = (document) => {
                 related_document_content: rel.target_document?.content || '',
                 current_paragraph_id: rel.source_paragraph_id,
                 related_paragraph_id: rel.target_paragraph_id,
+                is_pending: pendingItems.length > 0,
+                pending_items: pendingItems,
+                active_pendency_id: activePendency?.id || null,
+                pending_trigger_document_id: activePendency?.trigger_document_id || null,
+                pending_trigger_paragraph_id: activePendency?.trigger_paragraph_id || null,
                 related_paragraph_preview: extractParagraphPreview(
                     rel.target_document?.content,
                     rel.target_paragraph_id
@@ -576,6 +622,11 @@ const normalizeDocumentRelationships = (document) => {
     // targetRelationships (current is target, related is source)
     if (document.target_relationships) {
         document.target_relationships.forEach(rel => {
+            const pendingItems = (rel.pendencies || [])
+                .filter(item => !item.reviewed_at)
+                .sort((a, b) => Number(b.id) - Number(a.id));
+            const activePendency = pendingItems[0] || null;
+
             list.push({
                 ...rel,
                 is_source: false,
@@ -584,6 +635,11 @@ const normalizeDocumentRelationships = (document) => {
                 related_document_content: rel.source_document?.content || '',
                 current_paragraph_id: rel.target_paragraph_id,
                 related_paragraph_id: rel.source_paragraph_id,
+                is_pending: pendingItems.length > 0,
+                pending_items: pendingItems,
+                active_pendency_id: activePendency?.id || null,
+                pending_trigger_document_id: activePendency?.trigger_document_id || null,
+                pending_trigger_paragraph_id: activePendency?.trigger_paragraph_id || null,
                 related_paragraph_preview: extractParagraphPreview(
                     rel.source_document?.content,
                     rel.source_paragraph_id
@@ -612,16 +668,35 @@ const documentRelationships = computed(() => {
 
 watch(documentRelationships, (list) => {
     if (!activeRelationshipView.value) return;
-    const stillExists = list.some(rel => rel.id === activeRelationshipView.value.id);
-    if (!stillExists) {
+    const updated = list.find(rel => rel.id === activeRelationshipView.value.id);
+    if (!updated) {
         activeRelationshipView.value = null;
+        return;
     }
+    activeRelationshipView.value = updated;
 });
 
 const relationshipStyles = computed(() => {
     if (!documentRelationships.value || documentRelationships.value.length === 0) return '';
-    return documentRelationships.value.map(rel => {
-        return `.a4-page .tiptap [data-id="${rel.current_paragraph_id}"]::before { opacity: 1; background-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }`;
+
+    const paragraphStyleMap = new Map();
+
+    documentRelationships.value.forEach((rel) => {
+        const existing = paragraphStyleMap.get(rel.current_paragraph_id);
+        if (!existing) {
+            paragraphStyleMap.set(rel.current_paragraph_id, {
+                isPending: !!rel.is_pending,
+            });
+            return;
+        }
+        existing.isPending = existing.isPending || !!rel.is_pending;
+    });
+
+    return Array.from(paragraphStyleMap.entries()).map(([paragraphId, style]) => {
+        if (style.isPending) {
+            return `.a4-page .tiptap [data-id="${paragraphId}"]::before { opacity: 1; background-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25); }`;
+        }
+        return `.a4-page .tiptap [data-id="${paragraphId}"]::before { opacity: 1; background-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }`;
     }).join('\n');
 });
 
@@ -648,6 +723,53 @@ const removeRelationship = (rel) => {
         .catch(err => {
             console.error(err);
             alert('Não foi possível excluir o relacionamento. Tente novamente.');
+        });
+};
+
+const resolveRelationshipPendency = (rel) => {
+    if (!rel?.id || !rel?.active_pendency_id) return;
+
+    const activePendencyId = String(rel.active_pendency_id);
+    const isLocalPendency = activePendencyId.startsWith('local-');
+
+    axios.post(route('library.documents.relationships.resolve-pendency', {
+        document: props.document.id,
+        relationship: rel.id,
+    }), {
+        ...(isLocalPendency ? {} : { pendency_id: rel.active_pendency_id }),
+    }, {
+        headers: {
+            Accept: 'application/json',
+        },
+    })
+        .then((response) => {
+            const reviewedId = response?.data?.reviewed_pendency_id;
+            if (isLocalPendency || !reviewedId) {
+                router.reload({ only: ['document'] });
+                return;
+            }
+
+            relationshipList.value = relationshipList.value.map((item) => {
+                if (Number(item.id) !== Number(rel.id)) return item;
+
+                const nextPendingItems = (item.pending_items || []).filter(p =>
+                    String(p.id) !== String(reviewedId)
+                );
+                const active = nextPendingItems[0] || null;
+
+                return {
+                    ...item,
+                    is_pending: nextPendingItems.length > 0,
+                    pending_items: nextPendingItems,
+                    active_pendency_id: active?.id || null,
+                    pending_trigger_document_id: active?.trigger_document_id || null,
+                    pending_trigger_paragraph_id: active?.trigger_paragraph_id || null,
+                };
+            });
+        })
+        .catch((err) => {
+            console.error(err);
+            alert('Não foi possível marcar a pendência como revisada.');
         });
 };
 
@@ -747,7 +869,12 @@ const handleRelatedDocumentClick = (e) => {
     while (el && el !== e.currentTarget) {
         let id = el.id || el.dataset.id;
         if ((el.tagName === 'P' || el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'LI') && id) {
-            selectedParagraphRelated.value = id === selectedParagraphRelated.value ? null : id;
+            const exists = selectedParagraphRelated.value.includes(id);
+            if (exists) {
+                selectedParagraphRelated.value = selectedParagraphRelated.value.filter(item => item !== id);
+            } else {
+                selectedParagraphRelated.value = [...selectedParagraphRelated.value, id];
+            }
             break;
         }
         el = el.parentElement;
@@ -758,13 +885,13 @@ const selectDocumentForRelationship = (doc) => {
     selectedRelationshipDocument.value = doc;
     showRelationshipModal.value = false;
     selectedParagraphCurrent.value = null;
-    selectedParagraphRelated.value = null;
+    selectedParagraphRelated.value = [];
 };
 
 const closeRelationshipView = () => {
     selectedRelationshipDocument.value = null;
     selectedParagraphCurrent.value = null;
-    selectedParagraphRelated.value = null;
+    selectedParagraphRelated.value = [];
 };
 
 const getRelationshipCurrentContent = () => {
@@ -786,16 +913,16 @@ const getRelationshipCurrentContent = () => {
 const getRelationshipRelatedContent = () => {
     if (!selectedRelationshipDocument.value) return '';
     let content = selectedRelationshipDocument.value.content;
-    if (selectedParagraphRelated.value) {
-        // Inject the active class into the HTML element with the matching id or data-id
-        const regex = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphRelated.value}"[^>]*class=")([^"]*)(")`, 'i');
-        if (regex.test(content)) {
-            content = content.replace(regex, `$1$2 is-selected-paragraph$3`);
-        } else {
-            // Element might not have a class attribute yet
-            const regexNoClass = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphRelated.value}"[^>]*)(>)`, 'i');
-            content = content.replace(regexNoClass, `$1 class="is-selected-paragraph"$2`);
-        }
+    if (selectedParagraphRelated.value.length > 0) {
+        selectedParagraphRelated.value.forEach((paragraphId) => {
+            const regex = new RegExp(`(<[^>]+(?:id|data-id)="${paragraphId}"[^>]*class=")([^"]*)(")`, 'i');
+            if (regex.test(content)) {
+                content = content.replace(regex, `$1$2 is-selected-paragraph$3`);
+            } else {
+                const regexNoClass = new RegExp(`(<[^>]+(?:id|data-id)="${paragraphId}"[^>]*)(>)`, 'i');
+                content = content.replace(regexNoClass, `$1 class="is-selected-paragraph"$2`);
+            }
+        });
     }
     return content;
 };
@@ -804,7 +931,7 @@ const submitRelationship = () => {
     const payload = {
         source_paragraph_id: selectedParagraphCurrent.value,
         target_document_id: selectedRelationshipDocument.value.id,
-        target_paragraph_id: selectedParagraphRelated.value
+        target_paragraph_ids: selectedParagraphRelated.value
     };
 
     axios.post(route('library.documents.relationships.store', props.document.id), payload)
@@ -815,8 +942,11 @@ const submitRelationship = () => {
         })
         .catch(error => {
             console.error('Error saving relationship:', error);
-            // Optionally, we could show a toast here. But close anyway to not block user.
-            closeRelationshipView();
+            const message = error?.response?.data?.message
+                || error?.response?.data?.errors?.target_paragraph_ids?.[0]
+                || error?.response?.data?.errors?.target_paragraph_id?.[0]
+                || 'Não foi possível criar o relacionamento.';
+            alert(message);
         });
 };
 
@@ -933,7 +1063,8 @@ onBeforeUnmount(() => {
             <RelationshipOverlayViewer :open="!!activeRelationshipView" :relationship="activeRelationshipView"
                 :relationships="documentRelationships" :current-document-title="form.title"
                 :current-document-content="getCurrentContent()" @close="closeRelationshipViewer"
-                @select-relationship="selectRelationshipInViewer" @remove-relationship="removeRelationship" />
+                @select-relationship="selectRelationshipInViewer" @remove-relationship="removeRelationship"
+                @resolve-pendency="resolveRelationshipPendency" />
 
             <DocumentRightPanel ref="rightPanelRef" v-model:show="showRightPanel" :toc-items="tocItems"
                 :version-history="versionHistory"
@@ -985,9 +1116,10 @@ onBeforeUnmount(() => {
                         class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden min-h-0 relative">
                         <div
                             :class="[selectedRelationshipDocument?.library_book_id === props.document.library_book_id ? (props.document.book?.color || 'bg-violet-700') : 'bg-gray-700', 'text-white px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
-                            <span v-if="selectedParagraphRelated"
-                                class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">1
-                                Selecionado</span>
+                            <span v-if="selectedParagraphRelated.length > 0"
+                                class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">
+                                {{ selectedParagraphRelated.length }} Selecionado{{ selectedParagraphRelated.length > 1 ? 's' : '' }}
+                            </span>
                             <span class="truncate text-sm mr-2 opacity-80 shrink-0">Relacionando com:</span>
                             <span class="truncate font-semibold">{{ selectedRelationshipDocument.title }}</span>
                             <div class="flex items-center gap-1 ml-auto shrink-0">
@@ -1006,11 +1138,11 @@ onBeforeUnmount(() => {
                         <div
                             class="flex-1 overflow-y-auto p-8 relative flex justify-center bg-gray-50/50 tiptap-relationship-container">
                             <div class="a4-page !min-h-0 relationship-selection-area"
-                                :class="{ 'has-selection': selectedParagraphRelated }"
+                                :class="{ 'has-selection': selectedParagraphRelated.length > 0 }"
                                 style="width: 100%; max-width: 210mm; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
                                 @click="handleRelatedDocumentClick">
                                 <div class="tiptap version-readonly"
-                                    :class="{ 'document-has-selection': selectedParagraphRelated }"
+                                    :class="{ 'document-has-selection': selectedParagraphRelated.length > 0 }"
                                     v-html="getRelationshipRelatedContent()" />
                             </div>
                         </div>
@@ -1019,7 +1151,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Floating Action Button for submitting relationship -->
-                <div v-if="selectedParagraphCurrent && selectedParagraphRelated"
+                <div v-if="selectedParagraphCurrent && selectedParagraphRelated.length > 0"
                     class="absolute bottom-6 right-6 z-[110] animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <button @click="submitRelationship"
                         class="bg-violet-600 hover:bg-violet-700 text-white shadow-xl shadow-violet-500/30 font-semibold py-3 px-6 rounded-full flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 border border-violet-500/50 text-base">

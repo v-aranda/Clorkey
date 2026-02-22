@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { X, Link as LinkIcon, Trash2 } from 'lucide-vue-next';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { X, Link as LinkIcon, Trash2, CheckCircle2 } from 'lucide-vue-next';
 
 const props = defineProps({
     open: {
@@ -25,7 +25,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['close', 'selectRelationship', 'removeRelationship']);
+const emit = defineEmits(['close', 'selectRelationship', 'removeRelationship', 'resolvePendency']);
 
 const relatedDocumentTitle = computed(() => props.relationship?.related_document_title || 'Documento relacionado');
 const relatedDocumentContent = computed(() => props.relationship?.related_document_content || '');
@@ -46,11 +46,97 @@ const injectRelationshipHighlight = (html, paragraphId) => {
 };
 
 const highlightedCurrentContent = computed(() => {
-    return injectRelationshipHighlight(props.currentDocumentContent, props.relationship?.current_paragraph_id);
+    const highlightClass = props.relationship?.is_pending
+        ? 'relationship-overlay-highlight-pending'
+        : 'relationship-overlay-highlight';
+    return injectRelationshipHighlight(props.currentDocumentContent, props.relationship?.current_paragraph_id)
+        .replace(/relationship-overlay-highlight/g, highlightClass);
 });
 
 const highlightedRelatedContent = computed(() => {
-    return injectRelationshipHighlight(relatedDocumentContent.value, props.relationship?.related_paragraph_id);
+    const highlightClass = props.relationship?.is_pending
+        ? 'relationship-overlay-highlight-pending'
+        : 'relationship-overlay-highlight';
+    return injectRelationshipHighlight(relatedDocumentContent.value, props.relationship?.related_paragraph_id)
+        .replace(/relationship-overlay-highlight/g, highlightClass);
+});
+
+const triggerParagraphId = computed(() => props.relationship?.pending_trigger_paragraph_id || null);
+
+const showResolveOnCurrent = computed(() => {
+    if (!props.relationship?.is_pending || !triggerParagraphId.value || !props.relationship?.current_paragraph_id) return false;
+    return String(triggerParagraphId.value) !== String(props.relationship.current_paragraph_id);
+});
+
+const showResolveOnRelated = computed(() => {
+    if (!props.relationship?.is_pending || !triggerParagraphId.value || !props.relationship?.related_paragraph_id) return false;
+    return String(triggerParagraphId.value) !== String(props.relationship.related_paragraph_id);
+});
+
+const currentScrollRef = ref(null);
+const relatedScrollRef = ref(null);
+const currentResolveStyle = ref(null);
+const relatedResolveStyle = ref(null);
+
+const getOffsetWithin = (container, element) => {
+    let top = 0;
+    let left = 0;
+    let current = element;
+
+    while (current && current !== container) {
+        top += current.offsetTop || 0;
+        left += current.offsetLeft || 0;
+        current = current.offsetParent;
+    }
+
+    return { top, left };
+};
+
+const updateResolveButtonPosition = (containerRef, styleRef, shouldShow) => {
+    if (!shouldShow || !containerRef.value) {
+        styleRef.value = null;
+        return;
+    }
+
+    const target = containerRef.value.querySelector('.relationship-overlay-highlight, .relationship-overlay-highlight-pending');
+    if (!target) {
+        styleRef.value = null;
+        return;
+    }
+
+    const { top, left } = getOffsetWithin(containerRef.value, target);
+    const buttonTop = top + target.offsetHeight + 8;
+    const buttonLeft = left + target.offsetWidth;
+
+    styleRef.value = {
+        top: `${buttonTop}px`,
+        left: `${buttonLeft}px`,
+    };
+};
+
+const updateResolveButtons = () => {
+    updateResolveButtonPosition(currentScrollRef, currentResolveStyle, showResolveOnCurrent.value);
+    updateResolveButtonPosition(relatedScrollRef, relatedResolveStyle, showResolveOnRelated.value);
+};
+
+watch(
+    () => [props.open, props.relationship?.id, highlightedCurrentContent.value, highlightedRelatedContent.value],
+    async () => {
+        await nextTick();
+        updateResolveButtons();
+    }
+);
+
+const handleResize = () => {
+    updateResolveButtons();
+};
+
+onMounted(() => {
+    window.addEventListener('resize', handleResize);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', handleResize);
 });
 </script>
 
@@ -69,12 +155,20 @@ const highlightedRelatedContent = computed(() => {
                                         <LinkIcon class="w-4 h-4 shrink-0 text-violet-200" />
                                         <span class="text-xs uppercase tracking-wide text-violet-200">Documento atual</span>
                                     </div>
-                                    <span class="text-sm font-semibold truncate ml-3">{{ currentDocumentTitle }}</span>
+                                    <div class="flex items-center gap-3 ml-3 min-w-0">
+                                        <span class="text-sm font-semibold truncate">{{ currentDocumentTitle }}</span>
+                                    </div>
                                 </div>
-                                <div class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40">
+                                <div ref="currentScrollRef" class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
                                     <div class="a4-page !min-h-0 !w-full !max-w-none shadow-sm">
                                         <div class="tiptap version-readonly" v-html="highlightedCurrentContent" />
                                     </div>
+                                    <button v-if="showResolveOnCurrent && currentResolveStyle" @click.stop="emit('resolvePendency', relationship)"
+                                        class="relationship-resolve-btn absolute inline-flex items-center gap-1 rounded-md bg-amber-400 hover:bg-emerald-500 hover:text-white text-amber-950 text-xs font-semibold px-2 py-1 transition-colors shadow-md"
+                                        :style="currentResolveStyle" title="Marcar pendência como revisada">
+                                        <CheckCircle2 class="w-3.5 h-3.5" />
+                                        Solucionar
+                                    </button>
                                 </div>
                             </div>
 
@@ -88,10 +182,16 @@ const highlightedRelatedContent = computed(() => {
                                         <span class="text-sm font-semibold truncate">{{ relatedDocumentTitle }}</span>
                                     </div>
                                 </div>
-                                <div class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40">
+                                <div ref="relatedScrollRef" class="h-[calc(100%-52px)] overflow-y-auto p-6 bg-gray-50/40 relative">
                                     <div class="a4-page !min-h-0 !w-full !max-w-none shadow-sm">
                                         <div class="tiptap version-readonly" v-html="highlightedRelatedContent" />
                                     </div>
+                                    <button v-if="showResolveOnRelated && relatedResolveStyle" @click.stop="emit('resolvePendency', relationship)"
+                                        class="relationship-resolve-btn absolute inline-flex items-center gap-1 rounded-md bg-amber-400 hover:bg-emerald-500 hover:text-white text-amber-950 text-xs font-semibold px-2 py-1 transition-colors shadow-md"
+                                        :style="relatedResolveStyle" title="Marcar pendência como revisada">
+                                        <CheckCircle2 class="w-3.5 h-3.5" />
+                                        Solucionar
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -114,9 +214,13 @@ const highlightedRelatedContent = computed(() => {
                                 role="button" tabindex="0" @keydown.enter="emit('selectRelationship', rel)"
                                 :class="[
                                     'w-full text-left rounded-lg border p-2.5 transition-colors relative cursor-pointer',
-                                    relationship?.id === rel.id
-                                        ? 'border-violet-400 bg-violet-50'
-                                        : 'border-gray-200 bg-white hover:border-violet-300'
+                                    rel.is_pending
+                                        ? (relationship?.id === rel.id
+                                            ? 'border-amber-400 bg-amber-100'
+                                            : 'border-amber-300 bg-amber-50 hover:border-amber-400')
+                                        : (relationship?.id === rel.id
+                                            ? 'border-violet-400 bg-violet-50'
+                                            : 'border-gray-200 bg-white hover:border-violet-300')
                                 ]">
                                 <button @click.stop="emit('removeRelationship', rel)"
                                     class="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors"
@@ -127,6 +231,9 @@ const highlightedRelatedContent = computed(() => {
                                 <p class="text-sm font-semibold text-gray-900 truncate pr-6">
                                     {{ rel.related_paragraph_preview || 'Sem prévia do parágrafo relacionado.' }}
                                 </p>
+                                <span v-if="rel.is_pending"
+                                    class="absolute bottom-2 right-2 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200"
+                                    title="Relacionamento pendente de revisão" />
                             </div>
                             <div v-if="relationships.length === 0" class="text-xs text-gray-500 italic p-1">
                                 Sem relacionamentos disponíveis.
@@ -230,5 +337,16 @@ const highlightedRelatedContent = computed(() => {
     background-color: rgba(139, 92, 246, 0.16);
     outline: 2px solid rgba(139, 92, 246, 0.7);
     border-radius: 4px;
+}
+
+.relationship-overlay-viewer .tiptap .relationship-overlay-highlight-pending {
+    background-color: rgba(245, 158, 11, 0.22);
+    outline: 2px solid rgba(245, 158, 11, 0.85);
+    border-radius: 4px;
+}
+
+.relationship-overlay-viewer .relationship-resolve-btn {
+    transform: translateX(calc(-100% + 8px));
+    z-index: 5;
 }
 </style>

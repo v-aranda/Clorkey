@@ -8,6 +8,11 @@ class DocumentRelationship extends Model
 {
     protected $guarded = [];
 
+    public function pendencies()
+    {
+        return $this->hasMany(DocumentRelationshipPendency::class, 'relationship_id');
+    }
+
     public function sourceDocument()
     {
         return $this->belongsTo(Document::class, 'source_document_id');
