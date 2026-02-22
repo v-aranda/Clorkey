@@ -25,6 +25,8 @@ const emit = defineEmits([
     'exportVersion',
     'openRelationshipModal',
     'removeRelationship',
+    'openRelationshipViewer',
+    'activeTabChange',
     'navigateToRelationship'
 ]);
 
@@ -52,6 +54,10 @@ watch(groupedRelationships, (newVal) => {
     if (currentParagraphIndex.value >= newVal.length) {
         currentParagraphIndex.value = Math.max(0, newVal.length - 1);
     }
+});
+
+watch(activeTab, (tab) => {
+    emit('activeTabChange', tab);
 });
 
 const currentGroup = computed(() => {
@@ -199,7 +205,8 @@ defineExpose({
                     <div class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                         <template v-if="currentGroup">
                             <div v-for="rel in currentGroup.relationships" :key="rel.id"
-                                class="bg-white border rounded-lg p-3 shadow-sm relative group hover:border-violet-300 transition-colors">
+                                @click="emit('openRelationshipViewer', rel)"
+                                class="bg-white border rounded-lg p-3 shadow-sm relative group hover:border-violet-300 transition-colors cursor-pointer">
 
                                 <div
                                     class="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -209,7 +216,7 @@ defineExpose({
                                         title="Abrir documento relacionado em nova aba">
                                         <ExternalLink class="w-4 h-4" />
                                     </a>
-                                    <button @click="openDeleteRelationship(rel)"
+                                    <button @click.stop="openDeleteRelationship(rel)"
                                         class="text-gray-400 hover:text-red-500 transition-colors"
                                         title="Remover Vínculo">
                                         <Trash2 class="w-4 h-4" />

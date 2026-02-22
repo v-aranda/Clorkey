@@ -22,6 +22,7 @@ import Image from '@tiptap/extension-image';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import EditorToolbar from '@/Components/EditorToolbar.vue';
 import DocumentRightPanel from '@/Components/DocumentRightPanel.vue';
+import RelationshipOverlayViewer from '@/Components/RelationshipOverlayViewer.vue';
 import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
     Menu, X, GitCompare,
@@ -518,6 +519,7 @@ const handleEditorClick = (e) => {
 const showRelationshipModal = ref(false);
 const selectedRelationshipDocument = ref(null);
 const relationshipSearchQuery = ref('');
+const activeRelationshipView = ref(null);
 
 // Relationship Selection State
 const selectedParagraphCurrent = ref(null); // ID of the selected paragraph in the current document
@@ -560,6 +562,7 @@ const normalizeDocumentRelationships = (document) => {
                 is_source: true,
                 related_document_id: rel.target_document_id,
                 related_document_title: rel.target_document?.title || `Documento #${rel.target_document_id}`,
+                related_document_content: rel.target_document?.content || '',
                 current_paragraph_id: rel.source_paragraph_id,
                 related_paragraph_id: rel.target_paragraph_id,
                 related_paragraph_preview: extractParagraphPreview(
@@ -578,6 +581,7 @@ const normalizeDocumentRelationships = (document) => {
                 is_source: false,
                 related_document_id: rel.source_document_id,
                 related_document_title: rel.source_document?.title || `Documento #${rel.source_document_id}`,
+                related_document_content: rel.source_document?.content || '',
                 current_paragraph_id: rel.target_paragraph_id,
                 related_paragraph_id: rel.source_paragraph_id,
                 related_paragraph_preview: extractParagraphPreview(
@@ -606,6 +610,14 @@ const documentRelationships = computed(() => {
     return relationshipList.value;
 });
 
+watch(documentRelationships, (list) => {
+    if (!activeRelationshipView.value) return;
+    const stillExists = list.some(rel => rel.id === activeRelationshipView.value.id);
+    if (!stillExists) {
+        activeRelationshipView.value = null;
+    }
+});
+
 const relationshipStyles = computed(() => {
     if (!documentRelationships.value || documentRelationships.value.length === 0) return '';
     return documentRelationships.value.map(rel => {
@@ -629,12 +641,41 @@ const removeRelationship = (rel) => {
     })
         .then(() => {
             relationshipList.value = relationshipList.value.filter(item => item.id !== rel.id);
+            if (activeRelationshipView.value?.id === rel.id) {
+                activeRelationshipView.value = null;
+            }
         })
         .catch(err => {
             console.error(err);
             alert('Não foi possível excluir o relacionamento. Tente novamente.');
         });
 };
+
+const openRelationshipViewer = (rel) => {
+    if (!rel) return;
+    activeRelationshipView.value = rel;
+    navigateToRelationship(rel);
+};
+
+const selectRelationshipInViewer = (rel) => {
+    openRelationshipViewer(rel);
+};
+
+const closeRelationshipViewer = () => {
+    activeRelationshipView.value = null;
+};
+
+const handleRightPanelTabChange = (tab) => {
+    if (tab !== 'relationships') {
+        closeRelationshipViewer();
+    }
+};
+
+watch(showRightPanel, (isOpen) => {
+    if (!isOpen) {
+        closeRelationshipViewer();
+    }
+});
 
 const navigateToRelationship = (rel) => {
     // Scroll to the current paragraph block
@@ -660,6 +701,7 @@ const loadingDocuments = ref(false);
 const openRelationshipModal = () => {
     relationshipSearchQuery.value = '';
     showRelationshipModal.value = true;
+    closeRelationshipViewer();
     // Carregar documentos se a lista estiver vazia
     if (availableDocuments.value.length === 0) {
         loadingDocuments.value = true;
@@ -888,12 +930,19 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Right Panel Sidebar -->
+            <RelationshipOverlayViewer :open="!!activeRelationshipView" :relationship="activeRelationshipView"
+                :relationships="documentRelationships" :current-document-title="form.title"
+                :current-document-content="getCurrentContent()" @close="closeRelationshipViewer"
+                @select-relationship="selectRelationshipInViewer" @remove-relationship="removeRelationship" />
+
             <DocumentRightPanel ref="rightPanelRef" v-model:show="showRightPanel" :toc-items="tocItems"
                 :version-history="versionHistory"
                 :active-version-id="versionModal.version?.id" :relationships="documentRelationships"
                 @scroll-to-heading="scrollToHeading" @open-version-modal="openVersionModal" @save-version="saveVersion"
                 @delete-version="deleteVersion" @export-version="v => exportToPdf(v)"
                 @open-relationship-modal="openRelationshipModal" @remove-relationship="removeRelationship"
+                @open-relationship-viewer="openRelationshipViewer"
+                @active-tab-change="handleRightPanelTabChange"
                 @navigate-to-relationship="navigateToRelationship" />
 
         </div>
