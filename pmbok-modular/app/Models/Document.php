@@ -37,4 +37,14 @@ class Document extends Model
     {
         return $this->hasMany(DocumentVersion::class);
     }
+
+    public function sourceRelationships()
+    {
+        return $this->hasMany(DocumentRelationship::class, 'source_document_id');
+    }
+
+    public function targetRelationships()
+    {
+        return $this->hasMany(DocumentRelationship::class, 'target_document_id');
+    }
 }

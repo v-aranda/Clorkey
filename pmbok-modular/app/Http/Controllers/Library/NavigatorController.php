@@ -39,4 +39,23 @@ class NavigatorController extends Controller
 
         return response()->json($folders);
     }
+
+    /**
+     * Search and list Documents across the library, optionally filtered by book.
+     */
+    public function documents(Request $request)
+    {
+        $query = \App\Models\Document::query()
+            ->select('id', 'title', 'content', 'library_book_id');
+
+        if ($request->has('book_id')) {
+            $query->where('library_book_id', $request->query('book_id'));
+        }
+
+        if ($request->filled('search')) {
+            $query->where('title', 'ilike', '%' . $request->query('search') . '%');
+        }
+
+        return response()->json($query->orderBy('title')->limit(50)->get());
+    }
 }

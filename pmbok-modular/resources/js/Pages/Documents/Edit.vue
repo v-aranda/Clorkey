@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useForm, router, Link } from '@inertiajs/vue3';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
@@ -26,8 +26,9 @@ import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
     Menu, X, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
-    Link2Off, ExternalLink, Download
+    Link2Off, ExternalLink, Download, FileText, RefreshCcw, Search
 } from 'lucide-vue-next';
+import Modal from '@/Components/Modal.vue';
 import axios from 'axios';
 import DiffMatchPatch from 'diff-match-patch';
 
@@ -252,6 +253,7 @@ onBeforeUnmount(() => {
 // Document Right Panel logic
 const tocItems = ref([]);
 const showRightPanel = ref(true);
+const rightPanelRef = ref(null);
 const versionHistory = ref([]);
 
 async function loadVersions() {
@@ -475,6 +477,307 @@ const closeContextMenu = () => {
     tableContextMenu.value.show = false;
 };
 
+// =============================================
+// Document Relationships
+
+const handleEditorClick = (e) => {
+    // Traverse DOM upwards until we hit a block-level Tiptap element (para, heading, list item)
+    let el = e.target;
+    while (el && el.classList && !el.classList.contains('a4-page')) {
+        let id = el.id || el.dataset.id;
+        if ((el.tagName === 'P' || el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'LI') && id) {
+
+            // Dot marker uses ::before with left: -20px and width: 6px.
+            // Since it's a pseudo-element, we detect clicks by X-range near the marker.
+            const rect = el.getBoundingClientRect();
+            const dotLeftOffsetPx = -20;
+            const dotSizePx = 6;
+            const dotHitSlopPx = 10;
+            const dotStartX = rect.left + dotLeftOffsetPx - dotHitSlopPx;
+            const dotEndX = rect.left + dotLeftOffsetPx + dotSizePx + dotHitSlopPx;
+
+            if (e.clientX >= dotStartX && e.clientX <= dotEndX) {
+
+                // Does this paragraph have relationships?
+                const rel = documentRelationships.value.find(r => r.current_paragraph_id === id);
+                if (rel) {
+                    showRightPanel.value = true;
+                    nextTick(() => {
+                        rightPanelRef.value?.focusRelationshipParagraph(id);
+                        navigateToRelationship(rel);
+                    });
+                    return; // Handled
+                }
+            }
+            break;
+        }
+        el = el.parentElement;
+    }
+};
+// =============================================
+const showRelationshipModal = ref(false);
+const selectedRelationshipDocument = ref(null);
+const relationshipSearchQuery = ref('');
+
+// Relationship Selection State
+const selectedParagraphCurrent = ref(null); // ID of the selected paragraph in the current document
+const selectedParagraphRelated = ref(null); // ID of the selected paragraph in the related document
+
+const extractParagraphPreview = (html, paragraphId) => {
+    if (!html || !paragraphId) return '';
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+
+    let target = null;
+    try {
+        target = wrapper.querySelector(`[data-id="${paragraphId}"]`);
+    } catch {
+        target = null;
+    }
+
+    if (!target) {
+        target = wrapper.querySelector(`[id="${paragraphId}"]`) || wrapper.getElementById?.(paragraphId);
+    }
+
+    if (!target) return '';
+
+    const text = (target.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+
+    return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+};
+
+const normalizeDocumentRelationships = (document) => {
+    const list = [];
+    if (!document) return list;
+
+    // sourceRelationships (current is source, related is target)
+    if (document.source_relationships) {
+        document.source_relationships.forEach(rel => {
+            list.push({
+                ...rel,
+                is_source: true,
+                related_document_id: rel.target_document_id,
+                related_document_title: rel.target_document?.title || `Documento #${rel.target_document_id}`,
+                current_paragraph_id: rel.source_paragraph_id,
+                related_paragraph_id: rel.target_paragraph_id,
+                related_paragraph_preview: extractParagraphPreview(
+                    rel.target_document?.content,
+                    rel.target_paragraph_id
+                ),
+            });
+        });
+    }
+
+    // targetRelationships (current is target, related is source)
+    if (document.target_relationships) {
+        document.target_relationships.forEach(rel => {
+            list.push({
+                ...rel,
+                is_source: false,
+                related_document_id: rel.source_document_id,
+                related_document_title: rel.source_document?.title || `Documento #${rel.source_document_id}`,
+                current_paragraph_id: rel.target_paragraph_id,
+                related_paragraph_id: rel.source_paragraph_id,
+                related_paragraph_preview: extractParagraphPreview(
+                    rel.source_document?.content,
+                    rel.source_paragraph_id
+                ),
+            });
+        });
+    }
+
+    // Sort by id descending (newest first)
+    return list.sort((a, b) => b.id - a.id);
+};
+
+const relationshipList = ref([]);
+
+watch(
+    () => props.document,
+    (document) => {
+        relationshipList.value = normalizeDocumentRelationships(document);
+    },
+    { immediate: true }
+);
+
+const documentRelationships = computed(() => {
+    return relationshipList.value;
+});
+
+const relationshipStyles = computed(() => {
+    if (!documentRelationships.value || documentRelationships.value.length === 0) return '';
+    return documentRelationships.value.map(rel => {
+        return `.a4-page .tiptap [data-id="${rel.current_paragraph_id}"]::before { opacity: 1; background-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }`;
+    }).join('\n');
+});
+
+const removeRelationship = (rel) => {
+    if (!rel?.id) {
+        console.error('Relationship id inválido para exclusão:', rel);
+        return;
+    }
+
+    axios.delete(route('library.documents.relationships.destroy', {
+        document: props.document.id,
+        relationship: rel.id,
+    }), {
+        headers: {
+            Accept: 'application/json',
+        },
+    })
+        .then(() => {
+            relationshipList.value = relationshipList.value.filter(item => item.id !== rel.id);
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Não foi possível excluir o relacionamento. Tente novamente.');
+        });
+};
+
+const navigateToRelationship = (rel) => {
+    // Scroll to the current paragraph block
+    scrollToHeading(rel.current_paragraph_id);
+
+    // Highlight it temporarily
+    const element = document.querySelector(`[data-id="${rel.current_paragraph_id}"]`) || document.getElementById(rel.current_paragraph_id);
+    if (element) {
+        const originalBg = element.style.backgroundColor;
+        element.style.backgroundColor = 'rgba(139, 92, 246, 0.2)'; // violet-500 light
+        element.style.outline = '2px solid rgba(139, 92, 246, 0.8)';
+
+        setTimeout(() => {
+            element.style.backgroundColor = originalBg;
+            element.style.outline = 'none';
+        }, 2000);
+    }
+};
+
+const availableDocuments = ref([]);
+const loadingDocuments = ref(false);
+
+const openRelationshipModal = () => {
+    relationshipSearchQuery.value = '';
+    showRelationshipModal.value = true;
+    // Carregar documentos se a lista estiver vazia
+    if (availableDocuments.value.length === 0) {
+        loadingDocuments.value = true;
+        axios.get(route('library.navigator.documents', { book_id: props.document.library_book_id }))
+            .then(res => {
+                availableDocuments.value = res.data;
+            })
+            .catch(err => {
+                console.error("Erro ao carregar documentos:", err);
+            })
+            .finally(() => {
+                loadingDocuments.value = false;
+            });
+    }
+};
+
+const closeRelationshipModal = () => {
+    showRelationshipModal.value = false;
+};
+
+const filteredRelationshipDocuments = computed(() => {
+    if (!relationshipSearchQuery.value) return availableDocuments.value;
+    const lowerQuery = relationshipSearchQuery.value.toLowerCase();
+    return availableDocuments.value.filter(doc => doc.title.toLowerCase().includes(lowerQuery));
+});
+
+// Handling clicks on the read-only views
+const handleCurrentDocumentClick = (e) => {
+    // Traverse DOM upwards until we hit a block-level Tiptap element (para, heading, list item)
+    let el = e.target;
+    while (el && el !== e.currentTarget) {
+        let id = el.id || el.dataset.id;
+        if ((el.tagName === 'P' || el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'LI') && id) {
+            selectedParagraphCurrent.value = id === selectedParagraphCurrent.value ? null : id;
+            break;
+        }
+        el = el.parentElement;
+    }
+};
+
+const handleRelatedDocumentClick = (e) => {
+    let el = e.target;
+    while (el && el !== e.currentTarget) {
+        let id = el.id || el.dataset.id;
+        if ((el.tagName === 'P' || el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'LI') && id) {
+            selectedParagraphRelated.value = id === selectedParagraphRelated.value ? null : id;
+            break;
+        }
+        el = el.parentElement;
+    }
+};
+
+const selectDocumentForRelationship = (doc) => {
+    selectedRelationshipDocument.value = doc;
+    showRelationshipModal.value = false;
+    selectedParagraphCurrent.value = null;
+    selectedParagraphRelated.value = null;
+};
+
+const closeRelationshipView = () => {
+    selectedRelationshipDocument.value = null;
+    selectedParagraphCurrent.value = null;
+    selectedParagraphRelated.value = null;
+};
+
+const getRelationshipCurrentContent = () => {
+    let content = getCurrentContent();
+    if (selectedParagraphCurrent.value) {
+        // Inject the active class into the HTML element with the matching id or data-id
+        const regex = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphCurrent.value}"[^>]*class=")([^"]*)(")`, 'i');
+        if (regex.test(content)) {
+            content = content.replace(regex, `$1$2 is-selected-paragraph$3`);
+        } else {
+            // Element might not have a class attribute yet
+            const regexNoClass = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphCurrent.value}"[^>]*)(>)`, 'i');
+            content = content.replace(regexNoClass, `$1 class="is-selected-paragraph"$2`);
+        }
+    }
+    return content;
+};
+
+const getRelationshipRelatedContent = () => {
+    if (!selectedRelationshipDocument.value) return '';
+    let content = selectedRelationshipDocument.value.content;
+    if (selectedParagraphRelated.value) {
+        // Inject the active class into the HTML element with the matching id or data-id
+        const regex = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphRelated.value}"[^>]*class=")([^"]*)(")`, 'i');
+        if (regex.test(content)) {
+            content = content.replace(regex, `$1$2 is-selected-paragraph$3`);
+        } else {
+            // Element might not have a class attribute yet
+            const regexNoClass = new RegExp(`(<[^>]+(?:id|data-id)="${selectedParagraphRelated.value}"[^>]*)(>)`, 'i');
+            content = content.replace(regexNoClass, `$1 class="is-selected-paragraph"$2`);
+        }
+    }
+    return content;
+};
+
+const submitRelationship = () => {
+    const payload = {
+        source_paragraph_id: selectedParagraphCurrent.value,
+        target_document_id: selectedRelationshipDocument.value.id,
+        target_paragraph_id: selectedParagraphRelated.value
+    };
+
+    axios.post(route('library.documents.relationships.store', props.document.id), payload)
+        .then(() => {
+            // Force reload to get updated relationships from server
+            router.reload({ only: ['document'] });
+            closeRelationshipView();
+        })
+        .catch(error => {
+            console.error('Error saving relationship:', error);
+            // Optionally, we could show a toast here. But close anyway to not block user.
+            closeRelationshipView();
+        });
+};
+
 onMounted(() => {
     window.addEventListener('click', closeContextMenu);
     loadVersions();
@@ -535,7 +838,7 @@ onBeforeUnmount(() => {
             <!-- Editor Content -->
             <div class="flex-1 min-w-0 overflow-y-auto bg-gray-100 relative" style="min-height: calc(100vh - 65px);">
                 <div class="py-10 flex justify-center">
-                    <div class="a4-page" @contextmenu="handleContextMenu">
+                    <div class="a4-page" @contextmenu="handleContextMenu" @click="handleEditorClick">
                         <editor-content :editor="editor" />
                     </div>
                 </div>
@@ -581,16 +884,105 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
                 </div>
+
             </div>
 
             <!-- Right Panel Sidebar -->
-            <DocumentRightPanel v-model:show="showRightPanel" :toc-items="tocItems" :version-history="versionHistory"
-                :active-version-id="versionModal.version?.id" @scroll-to-heading="scrollToHeading"
-                @open-version-modal="openVersionModal" @save-version="saveVersion" @delete-version="deleteVersion"
-                @export-version="v => exportToPdf(v)" />
-
+            <DocumentRightPanel ref="rightPanelRef" v-model:show="showRightPanel" :toc-items="tocItems"
+                :version-history="versionHistory"
+                :active-version-id="versionModal.version?.id" :relationships="documentRelationships"
+                @scroll-to-heading="scrollToHeading" @open-version-modal="openVersionModal" @save-version="saveVersion"
+                @delete-version="deleteVersion" @export-version="v => exportToPdf(v)"
+                @open-relationship-modal="openRelationshipModal" @remove-relationship="removeRelationship"
+                @navigate-to-relationship="navigateToRelationship" />
 
         </div>
+
+        <!-- Side-by-Side Reference Overlay (Full Screen) -->
+        <Teleport to="body">
+            <div v-if="selectedRelationshipDocument"
+                class="fixed inset-0 z-[100] bg-black/60 flex flex-col items-center justify-center p-4 sm:p-6 pb-24">
+
+                <!-- Removed floating cancel button -->
+
+                <div class="flex flex-col md:flex-row gap-4 sm:gap-6 w-full h-full relative">
+
+                    <!-- Coluna 1: Documento Atual -->
+                    <div
+                        class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden min-h-0">
+                        <div
+                            :class="[props.document.book?.color || 'bg-violet-700', props.document.book?.text_color || 'text-white', 'px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
+                            <span v-if="selectedParagraphCurrent"
+                                class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">1
+                                Selecionado</span>
+                            <span class="truncate text-sm mr-2 opacity-80 shrink-0">Documento Atual:</span>
+                            <span class="truncate font-semibold">{{ form.title }}</span>
+                        </div>
+                        <div
+                            class="flex-1 overflow-y-auto p-8 relative flex justify-center bg-gray-50/50 tiptap-relationship-container">
+                            <div class="a4-page !min-h-0 relationship-selection-area"
+                                :class="{ 'has-selection': selectedParagraphCurrent }"
+                                style="width: 100%; max-width: 210mm; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                                @click="handleCurrentDocumentClick">
+                                <div class="tiptap version-readonly"
+                                    :class="{ 'document-has-selection': selectedParagraphCurrent }"
+                                    v-html="getRelationshipCurrentContent()" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna 2: Documento Relacionado -->
+                    <div
+                        class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden min-h-0 relative">
+                        <div
+                            :class="[selectedRelationshipDocument?.library_book_id === props.document.library_book_id ? (props.document.book?.color || 'bg-violet-700') : 'bg-gray-700', 'text-white px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
+                            <span v-if="selectedParagraphRelated"
+                                class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">1
+                                Selecionado</span>
+                            <span class="truncate text-sm mr-2 opacity-80 shrink-0">Relacionando com:</span>
+                            <span class="truncate font-semibold">{{ selectedRelationshipDocument.title }}</span>
+                            <div class="flex items-center gap-1 ml-auto shrink-0">
+                                <button @click="openRelationshipModal"
+                                    class="p-1.5 hover:bg-white/20 rounded-md transition text-white"
+                                    title="Trocar documento relacionado">
+                                    <RefreshCcw class="w-4 h-4" />
+                                </button>
+                                <button @click="closeRelationshipView"
+                                    class="border-l border-white/20 pl-3 ml-2 text-sm font-medium hover:text-white/80 transition text-white"
+                                    title="Cancelar relacionamento">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="flex-1 overflow-y-auto p-8 relative flex justify-center bg-gray-50/50 tiptap-relationship-container">
+                            <div class="a4-page !min-h-0 relationship-selection-area"
+                                :class="{ 'has-selection': selectedParagraphRelated }"
+                                style="width: 100%; max-width: 210mm; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                                @click="handleRelatedDocumentClick">
+                                <div class="tiptap version-readonly"
+                                    :class="{ 'document-has-selection': selectedParagraphRelated }"
+                                    v-html="getRelationshipRelatedContent()" />
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Floating Action Button for submitting relationship -->
+                <div v-if="selectedParagraphCurrent && selectedParagraphRelated"
+                    class="absolute bottom-6 right-6 z-[110] animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <button @click="submitRelationship"
+                        class="bg-violet-600 hover:bg-violet-700 text-white shadow-xl shadow-violet-500/30 font-semibold py-3 px-6 rounded-full flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 border border-violet-500/50 text-base">
+                        <Plus class="w-5 h-5" />
+                        Confirmar
+                    </button>
+                </div>
+
+            </div>
+        </Teleport>
+
+        <!-- Duplicate Panel Removed -->
 
         <!-- Floating Toggle Panel Button (visible when Panel is hidden) -->
         <button v-if="!showRightPanel" @click="toggleRightPanel"
@@ -598,6 +990,60 @@ onBeforeUnmount(() => {
             title="Mostrar Painel">
             <Menu class="w-5 h-5" />
         </button>
+
+        <!-- Relationship File Explorer Modal -->
+        <Modal :show="showRelationshipModal" @close="closeRelationshipModal" maxWidth="2xl">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="text-lg font-medium text-gray-900 flex items-center gap-2">
+                        <LinkIcon class="w-5 h-5 text-gray-500" />
+                        Qual documento você deseja relacionar?
+                    </h2>
+                    <button @click="closeRelationshipModal" class="text-gray-400 hover:text-gray-600">
+                        <X class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div class="relative mb-4">
+                    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input v-model="relationshipSearchQuery" type="text"
+                        placeholder="Buscar documento para relacionar..."
+                        class="h-10 w-full rounded-md border border-input bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors" />
+                </div>
+
+                <!-- Explorador de Relacionamentos -->
+                <div class="border rounded-md divide-y overflow-y-auto max-h-96 custom-scrollbar">
+                    <div v-if="loadingDocuments" class="p-4 text-center text-sm text-gray-500">
+                        Carregando documentos...
+                    </div>
+                    <div v-else-if="filteredRelationshipDocuments.length === 0"
+                        class="p-4 text-center text-sm text-gray-500">
+                        Nenhum documento encontrado.
+                    </div>
+                    <button v-else v-for="doc in filteredRelationshipDocuments" :key="doc.id"
+                        @click="selectDocumentForRelationship(doc)"
+                        class="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition text-left group">
+                        <div
+                            class="p-2 bg-gray-100 group-hover:bg-primary/10 rounded-md text-gray-500 group-hover:text-primary transition-colors shrink-0">
+                            <FileText class="w-5 h-5" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="text-sm font-medium text-gray-900 truncate">{{ doc.title }}</h4>
+                            <p class="text-xs text-gray-500 mt-1">
+                                {{ doc.id === props.document.id ? 'Este mesmo Documento' : 'Documento na Biblioteca' }}
+                            </p>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button @click="closeRelationshipModal"
+                        class="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition font-medium">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </Modal>
 
         <!-- Link Modal -->
         <Teleport to="body">
@@ -702,6 +1148,11 @@ onBeforeUnmount(() => {
                 </button>
             </div>
         </Teleport>
+
+        <!-- Dynamic CSS Block for Persistently Coloring Relationship Dots -->
+        <component is="style" type="text/css">
+            {{ relationshipStyles }}
+        </component>
     </AuthenticatedLayout>
 </template>
 
@@ -715,6 +1166,35 @@ onBeforeUnmount(() => {
     border-radius: 4px;
     padding: 25mm 20mm;
     position: relative;
+}
+
+.tiptap-relationship-container .a4-page {
+    padding: 10mm 15mm;
+}
+
+/* Relationship Selection Hover Features */
+.relationship-selection-area .tiptap>* {
+    transition: background-color 0.2s, outline 0.2s;
+    cursor: pointer;
+    border-radius: 4px;
+    margin: -2px;
+    padding: 2px;
+}
+
+.relationship-selection-area .tiptap>*:hover {
+    background-color: rgba(139, 92, 246, 0.1);
+    /* purple-500 with opacity */
+    outline: 2px solid rgba(139, 92, 246, 0.3);
+}
+
+.document-has-selection>*:not(.is-selected-paragraph) {
+    opacity: 0.6;
+}
+
+.document-has-selection>*.is-selected-paragraph {
+    background-color: rgba(139, 92, 246, 0.2);
+    outline: 2px solid rgba(139, 92, 246, 0.8);
+    opacity: 1;
 }
 
 .a4-page .tiptap {
@@ -1090,7 +1570,6 @@ onBeforeUnmount(() => {
 }
 
 .version-readonly {
-    pointer-events: none;
     user-select: text;
 }
 
@@ -1102,5 +1581,41 @@ onBeforeUnmount(() => {
     color: #1a1a1a;
     min-height: calc(297mm - 50mm);
     user-select: text;
+}
+
+/* Indicators in Editor (Notion-style Hover Dots) */
+.a4-page .tiptap {
+    padding-left: 1.5rem;
+}
+
+.a4-page .tiptap p,
+.a4-page .tiptap h1,
+.a4-page .tiptap h2,
+.a4-page .tiptap h3 {
+    position: relative;
+}
+
+.a4-page .tiptap p::before,
+.a4-page .tiptap h1::before,
+.a4-page .tiptap h2::before,
+.a4-page .tiptap h3::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 0.6em;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.a4-page .tiptap p:hover::before,
+.a4-page .tiptap h1:hover::before,
+.a4-page .tiptap h2:hover::before,
+.a4-page .tiptap h3:hover::before {
+    transform: scale(1.5);
 }
 </style>

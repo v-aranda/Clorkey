@@ -40,6 +40,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Navigator API (JSON)
     Route::get('/library/navigator/books', [\App\Http\Controllers\Library\NavigatorController::class, 'books'])->name('library.navigator.books');
     Route::get('/library/navigator/books/{book}/folders', [\App\Http\Controllers\Library\NavigatorController::class, 'folders'])->name('library.navigator.folders');
+    Route::get('/library/navigator/documents', [\App\Http\Controllers\Library\NavigatorController::class, 'documents'])->name('library.navigator.documents');
 
     // Favorites
     Route::post('/library/favorites/toggle', [\App\Http\Controllers\Library\FavoriteController::class, 'toggle'])->name('library.favorites.toggle');
@@ -54,6 +55,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/library/documents/{document}/versions', [\App\Http\Controllers\Library\DocumentController::class, 'storeVersion'])->name('library.documents.versions.store');
     Route::get('/library/documents/{document}/versions/{version}', [\App\Http\Controllers\Library\DocumentController::class, 'showVersion'])->name('library.documents.versions.show');
     Route::delete('/library/documents/{document}/versions/{version}', [\App\Http\Controllers\Library\DocumentController::class, 'destroyVersion'])->name('library.documents.versions.destroy');
+
+    // Document Relationships
+    Route::post('/library/documents/{document}/relationships', [\App\Http\Controllers\Library\DocumentRelationshipController::class, 'store'])->name('library.documents.relationships.store');
+    Route::delete('/library/documents/{document}/relationships/{relationship}', [\App\Http\Controllers\Library\DocumentRelationshipController::class, 'destroy'])->name('library.documents.relationships.destroy');
 });
 
 Route::middleware('auth')->group(function () {

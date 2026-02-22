@@ -30,7 +30,14 @@ class DocumentController extends Controller
 
     public function show(Document $document)
     {
-        $document->load(['book', 'folder', 'user', 'links.source']);
+        $document->load([
+            'book',
+            'folder',
+            'user',
+            'links.source',
+            'sourceRelationships.targetDocument',
+            'targetRelationships.sourceDocument'
+        ]);
 
         return Inertia::render('Documents/Edit', [
             'document' => $document,
