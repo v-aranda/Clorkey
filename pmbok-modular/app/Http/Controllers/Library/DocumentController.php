@@ -51,7 +51,18 @@ class DocumentController extends Controller
 
         $document->update($data);
 
+        if ($request->wantsJson() || $request->ajax() || str_contains($request->header('Accept'), 'application/json')) {
+            return response()->json(['success' => true, 'message' => 'Documento salvo com sucesso.']);
+        }
+
         return back()->with('success', 'Documento salvo com sucesso.');
+    }
+
+    public function download(Document $document)
+    {
+        $html = '<html><head><style>' . $document->css . '</style></head><body>' . $document->content . '</body></html>';
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        return $pdf->download($document->title . '.pdf');
     }
 
     public function destroy(Document $document)

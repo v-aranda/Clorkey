@@ -19,4 +19,9 @@ class LibraryBook extends Model
     {
         return $this->hasMany(LibraryFile::class);
     }
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class, 'library_book_id');
+    }
 }

@@ -32,4 +32,9 @@ class LibraryFolder extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class, 'library_folder_id');
+    }
 }

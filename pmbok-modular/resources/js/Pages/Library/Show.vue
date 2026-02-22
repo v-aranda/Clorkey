@@ -5,6 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Button from '@/Components/ui/Button.vue';
 import FolderItem from '@/Components/ui/FolderItem.vue';
 import FileItem from '@/Components/ui/FileItem.vue';
+import DocumentItem from '@/Components/ui/DocumentItem.vue';
 import UploadToast from '@/Components/ui/UploadToast.vue';
 import Dialog from '@/Components/ui/Dialog.vue';
 import LibraryNavigator from '@/Components/ui/LibraryNavigator.vue';
@@ -18,6 +19,7 @@ const props = defineProps({
     currentFolder: Object,
     folders: Array,
     files: Array,
+    documents: Array,
     breadcrumbs: Array,
     favoriteIds: { type: Array, default: () => [] },
 });
@@ -73,6 +75,12 @@ const filteredFiles = computed(() => {
     return props.files.filter(f => f.name.toLowerCase().includes(q));
 });
 
+const filteredDocuments = computed(() => {
+    if (!searchQuery.value) return props.documents;
+    const q = searchQuery.value.toLowerCase();
+    return props.documents.filter(d => d.title.toLowerCase().includes(q));
+});
+
 // =============================================
 // Selection Mode
 // =============================================
@@ -101,8 +109,20 @@ const toggleSelectFile = (file) => {
     selectedItems.value = next;
 };
 
+const toggleSelectDocument = (doc) => {
+    const key = `document-${doc.id}`;
+    const next = new Set(selectedItems.value);
+    if (next.has(key)) {
+        next.delete(key);
+    } else {
+        next.add(key);
+    }
+    selectedItems.value = next;
+};
+
 const isFolderSelected = (folder) => selectedItems.value.has(`folder-${folder.id}`);
 const isFileSelected = (file) => selectedItems.value.has(`file-${file.id}`);
+const isDocumentSelected = (doc) => selectedItems.value.has(`document-${doc.id}`);
 
 const cancelSelection = () => {
     selectedItems.value = new Set();
@@ -122,8 +142,10 @@ const requestDelete = (type, item = null) => {
         message = `Tem certeza que deseja excluir ${selectedCount.value} item(ns) selecionado(s)?`;
     } else if (type === 'folder') {
         message = `Tem certeza que deseja excluir o ficheiro "${item.name}" e todo seu conteúdo?`;
-    } else {
+    } else if (type === 'file') {
         message = `Tem certeza que deseja excluir o arquivo "${item.name}"?`;
+    } else if (type === 'document') {
+        message = `Tem certeza que deseja excluir o documento "${item.title}"?`;
     }
     deleteTarget.value = { type, item, message };
     showDeleteDialog.value = true;
@@ -137,10 +159,12 @@ const confirmDelete = () => {
     if (type === 'bulk') {
         const folderIds = [];
         const fileIds = [];
+        const docIds = [];
         selectedItems.value.forEach(key => {
             const [t, id] = key.split('-');
             if (t === 'folder') folderIds.push(id);
             if (t === 'file') fileIds.push(id);
+            if (t === 'document') docIds.push(id);
         });
 
         folderIds.forEach(id => {
@@ -149,11 +173,16 @@ const confirmDelete = () => {
         fileIds.forEach(id => {
             useForm({}).delete(route('library.files.destroy', id), { preserveScroll: true });
         });
+        docIds.forEach(id => {
+            useForm({}).delete(route('library.documents.destroy', id), { preserveScroll: true });
+        });
         cancelSelection();
     } else if (type === 'folder') {
         useForm({}).delete(route('library.folders.destroy', item.id));
     } else if (type === 'file') {
         useForm({}).delete(route('library.files.destroy', item.id));
+    } else if (type === 'document') {
+        useForm({}).delete(route('library.documents.destroy', item.id));
     }
 
     showDeleteDialog.value = false;
@@ -230,6 +259,97 @@ const confirmMove = async () => {
     } catch (error) {
         alert('Erro ao mover itens. Tente novamente.');
     }
+};
+
+// =============================================
+// Drag and Drop (Move)
+// =============================================
+const dragItem = ref(null);
+const dropTargetId = ref(null);
+const isDraggingOverBreadcrumb = ref(null);
+
+const onDragStart = (e, type, id) => {
+    e.dataTransfer.effectAllowed = 'move';
+    dragItem.value = { type, id };
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type, id }));
+};
+
+const onDragOverFolder = (e, folderId) => {
+    if (!dragItem.value) return;
+    if (dragItem.value.type === 'folder' && dragItem.value.id === folderId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dropTargetId.value = folderId;
+};
+
+const onDragLeaveFolder = (e, folderId) => {
+    if (dropTargetId.value === folderId) {
+        dropTargetId.value = null;
+    }
+};
+
+const onDragOverBreadcrumb = (e, targetId) => {
+    if (!dragItem.value) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    isDraggingOverBreadcrumb.value = targetId;
+};
+
+const onDragLeaveBreadcrumb = (e, targetId) => {
+    if (isDraggingOverBreadcrumb.value === targetId) {
+        isDraggingOverBreadcrumb.value = null;
+    }
+};
+
+const onDropMove = async (e, destinationFolderId, destinationBookId = null) => {
+    e.preventDefault();
+
+    // Reset visual state immediately
+    const targetFolder = destinationFolderId;
+    dropTargetId.value = null;
+    isDraggingOverBreadcrumb.value = null;
+
+    if (!dragItem.value) return;
+
+    if (dragItem.value.type === 'folder' && dragItem.value.id === targetFolder) {
+        dragItem.value = null;
+        return;
+    }
+
+    const currentFolderId = props.currentFolder?.id || null;
+    const destFolderId = targetFolder || null;
+
+    // Disallow if moving to current directory
+    if (destFolderId === currentFolderId) {
+        dragItem.value = null;
+        return;
+    }
+
+    try {
+        const payload = {
+            destination_book_id: destinationBookId || props.book.id,
+            destination_folder_id: destFolderId,
+        };
+
+        if (dragItem.value.type === 'file') {
+            payload.file_ids = [dragItem.value.id];
+        } else {
+            payload.folder_ids = [dragItem.value.id];
+        }
+
+        await axios.post(route('library.files.move'), payload);
+        router.reload({ preserveScroll: true });
+    } catch (error) {
+        alert('Erro ao mover item. Tente novamente.');
+    } finally {
+        dragItem.value = null;
+    }
+};
+
+const onDragEnd = () => {
+    dragItem.value = null;
+    dropTargetId.value = null;
+    isDraggingOverBreadcrumb.value = null;
 };
 
 // =============================================
@@ -310,6 +430,13 @@ const closeInfoPanel = () => {
 };
 
 const infoIsFile = computed(() => infoItemType.value === 'file');
+const infoIsFolder = computed(() => infoItemType.value === 'folder');
+const infoIsDocument = computed(() => infoItemType.value === 'document');
+
+const infoItemName = computed(() => {
+    if (!infoItem.value) return '';
+    return infoIsDocument.value ? infoItem.value.title : infoItem.value.name;
+});
 
 const infoPreviewSrc = computed(() => {
     if (!infoItem.value || !infoIsFile.value) return null;
@@ -341,7 +468,7 @@ const infoEditName = ref('');
 const infoInputRef = ref(null);
 
 const startInfoRename = () => {
-    infoEditName.value = infoItem.value.name;
+    infoEditName.value = infoItemName.value;
     infoEditing.value = true;
     nextTick(() => {
         if (infoInputRef.value) {
@@ -362,13 +489,15 @@ const startInfoRename = () => {
 
 const saveInfoRename = () => {
     const trimmed = infoEditName.value.trim();
-    if (!trimmed || trimmed === infoItem.value.name) {
+    if (!trimmed || trimmed === infoItemName.value) {
         infoEditing.value = false;
         return;
     }
 
     if (infoIsFile.value) {
         renameFile(infoItem.value, trimmed);
+    } else if (infoIsDocument.value) {
+        renameDocument(infoItem.value, trimmed);
     } else {
         renameFolder(infoItem.value, trimmed);
     }
@@ -378,6 +507,8 @@ const saveInfoRename = () => {
 const deleteFromInfo = () => {
     if (infoIsFile.value) {
         deleteFile(infoItem.value);
+    } else if (infoIsDocument.value) {
+        deleteDocument(infoItem.value);
     } else {
         deleteFolder(infoItem.value);
     }
@@ -406,6 +537,8 @@ const downloadFolder = async (folder) => {
 const downloadFromInfo = () => {
     if (infoIsFile.value) {
         window.open(route('library.files.download', infoItem.value.id), '_blank');
+    } else if (infoIsDocument.value) {
+        window.open(route('library.documents.download', infoItem.value.id), '_blank');
     } else {
         downloadFolder(infoItem.value);
     }
@@ -431,6 +564,12 @@ const closeContextMenu = () => {
 };
 
 const contextDownload = () => {
+    if (contextMenu.value.type === 'document') {
+        window.open(route('library.documents.download', contextMenu.value.item.id), '_blank');
+        closeContextMenu();
+        return;
+    }
+
     if (contextMenu.value.type === 'file') {
         window.open(route('library.files.download', contextMenu.value.item.id), '_blank');
     } else {
@@ -448,6 +587,8 @@ const contextRename = () => {
 const contextDelete = () => {
     if (contextMenu.value.type === 'file') {
         deleteFile(contextMenu.value.item);
+    } else if (contextMenu.value.type === 'document') {
+        deleteDocument(contextMenu.value.item);
     } else {
         deleteFolder(contextMenu.value.item);
     }
@@ -506,6 +647,16 @@ const createFolderWithAutoEdit = () => {
                 }
             });
         },
+    });
+};
+
+const createDocument = () => {
+    useForm({
+        title: 'Novo Documento',
+        library_book_id: props.book.id,
+        library_folder_id: props.currentFolder?.id || null,
+    }).post(route('library.documents.store'), {
+        preserveScroll: true,
     });
 };
 
@@ -652,6 +803,18 @@ const renameFile = (file, newName) => {
     });
 };
 
+const deleteDocument = (doc) => {
+    requestDelete('document', doc);
+};
+
+const renameDocument = (doc, newName) => {
+    if (doc.title === newName) return;
+
+    useForm({ title: newName }).put(route('library.documents.update', doc.id), {
+        preserveScroll: true,
+    });
+};
+
 </script>
 
 <template>
@@ -665,15 +828,22 @@ const renameFile = (file, newName) => {
                         Biblioteca
                     </Link>
                     <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
-                    <Link :href="route('library.show', book.id)"
-                        class="hover:text-gray-900 transition-colors whitespace-nowrap"
-                        :class="!currentFolder && !breadcrumbs?.length ? 'font-semibold text-gray-800' : ''">
+                    <Link :href="route('library.show', book.id)" @dragover="onDragOverBreadcrumb($event, 'root')"
+                        @dragleave="onDragLeaveBreadcrumb($event, 'root')" @drop="onDropMove($event, null, book.id)"
+                        class="px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap" :class="[
+                            !currentFolder && !breadcrumbs?.length ? 'font-semibold text-gray-800' : '',
+                            isDraggingOverBreadcrumb === 'root' ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''
+                        ]">
                         {{ book.title }}
                     </Link>
                     <template v-if="breadcrumbs?.length" v-for="crumb in breadcrumbs" :key="crumb.id">
                         <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
                         <Link :href="route('library.folder.show', [book.id, crumb.id])"
-                            class="hover:text-gray-900 transition-colors whitespace-nowrap truncate max-w-[120px]">
+                            @dragover="onDragOverBreadcrumb($event, crumb.id)"
+                            @dragleave="onDragLeaveBreadcrumb($event, crumb.id)"
+                            @drop="onDropMove($event, crumb.id, book.id)"
+                            class="px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap truncate max-w-[120px]"
+                            :class="isDraggingOverBreadcrumb === crumb.id ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''">
                             {{ crumb.name }}
                         </Link>
                     </template>
@@ -735,7 +905,13 @@ const renameFile = (file, newName) => {
                         <div v-if="filteredFolders.length > 0" class="mb-8">
                             <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Ficheiros</h3>
                             <div class="flex flex-wrap gap-4">
-                                <div v-for="folder in filteredFolders" :key="folder.id" class="relative">
+                                <div v-for="folder in filteredFolders" :key="folder.id"
+                                    class="relative transition-all rounded-lg"
+                                    :class="dropTargetId === folder.id ? 'ring-2 ring-primary ring-offset-2 scale-[1.02] bg-primary/5' : ''"
+                                    draggable="true" @dragstart="onDragStart($event, 'folder', folder.id)"
+                                    @dragend="onDragEnd" @dragover="onDragOverFolder($event, folder.id)"
+                                    @dragleave="onDragLeaveFolder($event, folder.id)"
+                                    @drop="onDropMove($event, folder.id, book.id)">
                                     <FolderItem :ref="(el) => setFolderRef(el, folder.id)" :name="folder.name"
                                         :href="route('library.folder.show', [book.id, folder.id])"
                                         :selected="isFolderSelected(folder)" :selection-mode="selectionMode"
@@ -752,7 +928,9 @@ const renameFile = (file, newName) => {
                         <div v-if="filteredFiles.length > 0">
                             <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Arquivos</h3>
                             <div class="flex flex-wrap gap-4">
-                                <div v-for="file in filteredFiles" :key="file.id" class="relative">
+                                <div v-for="file in filteredFiles" :key="file.id"
+                                    class="relative transition-all rounded-lg" draggable="true"
+                                    @dragstart="onDragStart($event, 'file', file.id)" @dragend="onDragEnd">
                                     <FileItem :file="file" :selected="isFileSelected(file)"
                                         :selection-mode="selectionMode" :favorited="isFavorite('file', file.id)"
                                         @rename="(newName) => renameFile(file, newName)"
@@ -763,8 +941,27 @@ const renameFile = (file, newName) => {
                             </div>
                         </div>
 
+                        <!-- Documents Grid -->
+                        <div v-if="filteredDocuments.length > 0" class="mt-8">
+                            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Documentos
+                            </h3>
+                            <div class="flex flex-wrap gap-4">
+                                <div v-for="doc in filteredDocuments" :key="doc.id"
+                                    class="relative transition-all rounded-lg" draggable="true"
+                                    @dragstart="onDragStart($event, 'document', doc.id)" @dragend="onDragEnd">
+                                    <DocumentItem :document="doc" :selected="isDocumentSelected(doc)"
+                                        :selection-mode="selectionMode" :favorited="isFavorite('document', doc.id)"
+                                        @rename="(newName) => renameDocument(doc, newName)"
+                                        @select="toggleSelectDocument(doc)" @info="openInfoPanel(doc, 'document')"
+                                        @preview="router.get(route('library.documents.show', doc.id))"
+                                        @unfavorite="toggleFavorite('document', doc.id)"
+                                        @contextmenu="(e) => openContextMenu(e, doc, 'document')" />
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Empty State -->
-                        <div v-if="filteredFolders.length === 0 && filteredFiles.length === 0"
+                        <div v-if="filteredFolders.length === 0 && filteredFiles.length === 0 && filteredDocuments.length === 0"
                             class="flex flex-col items-center justify-center py-20 text-gray-400">
                             <Upload class="w-12 h-12 mb-4 text-gray-300" />
                             <template v-if="searchQuery">
@@ -863,9 +1060,14 @@ const renameFile = (file, newName) => {
                             <template v-if="infoIsFile && infoPreviewSrc">
                                 <img :src="infoPreviewSrc" class="w-full h-full object-contain" alt="Preview" />
                             </template>
-                            <template v-else-if="!infoIsFile">
+                            <template v-else-if="infoIsFolder">
                                 <div class="flex flex-col items-center gap-2">
                                     <Folder class="w-20 h-20 text-blue-400" />
+                                </div>
+                            </template>
+                            <template v-else-if="infoIsDocument">
+                                <div class="flex flex-col items-center gap-2">
+                                    <FileText class="w-20 h-20 text-indigo-500" />
                                 </div>
                             </template>
                             <template v-else>
@@ -888,7 +1090,7 @@ const renameFile = (file, newName) => {
                                         @blur="saveInfoRename" />
                                 </template>
                                 <template v-else>
-                                    <span class="flex-1 text-sm font-medium text-gray-800 break-all">{{ infoItem.name
+                                    <span class="flex-1 text-sm font-medium text-gray-800 break-all">{{ infoItemName
                                     }}</span>
                                     <button @click="startInfoRename"
                                         class="p-1.5 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
@@ -921,12 +1123,13 @@ const renameFile = (file, newName) => {
                     <!-- Footer with actions -->
                     <div class="border-t px-6 py-4 shrink-0 flex gap-3">
                         <Button variant="outline" class="gap-2"
-                            :class="isFavorite(infoIsFile ? 'file' : 'folder', infoItem?.id) ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''"
+                            :class="isFavorite(infoItemType, infoItem?.id) ? 'text-amber-600 border-amber-200 hover:bg-amber-50' : ''"
                             @click="toggleFavoriteFromInfo">
-                            <Star v-if="!isFavorite(infoIsFile ? 'file' : 'folder', infoItem?.id)" class="w-4 h-4" />
+                            <Star v-if="!isFavorite(infoItemType, infoItem?.id)" class="w-4 h-4" />
                             <StarOff v-else class="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" class="flex-1 gap-2" @click="downloadFromInfo">
+                        <Button v-if="infoItemType !== 'document'" variant="outline" class="flex-1 gap-2"
+                            @click="downloadFromInfo">
                             <Download class="w-4 h-4" />
                             Baixar
                         </Button>
@@ -971,6 +1174,15 @@ const renameFile = (file, newName) => {
                         <FolderPlus class="w-5 h-5 text-white" />
                     </div>
                     <span class="text-sm font-semibold text-gray-700 group-hover:text-gray-900">Ficheiro</span>
+                </button>
+
+                <!-- Nova Documento option -->
+                <button @click="showFab = false; createDocument()"
+                    class="flex items-center gap-3 bg-white rounded-full pl-4 pr-5 py-3 shadow-lg hover:shadow-xl transition-all hover:scale-105 group">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center">
+                        <FileText class="w-5 h-5 text-white" />
+                    </div>
+                    <span class="text-sm font-semibold text-gray-700 group-hover:text-gray-900">Documento</span>
                 </button>
             </div>
         </Transition>

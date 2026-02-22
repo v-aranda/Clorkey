@@ -43,6 +43,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Favorites
     Route::post('/library/favorites/toggle', [\App\Http\Controllers\Library\FavoriteController::class, 'toggle'])->name('library.favorites.toggle');
+    // Documents
+    Route::post('/library/documents', [\App\Http\Controllers\Library\DocumentController::class, 'store'])->name('library.documents.store');
+    Route::get('/library/documents/{document}', [\App\Http\Controllers\Library\DocumentController::class, 'show'])->name('library.documents.show');
+    Route::get('/library/documents/{document}/download', [\App\Http\Controllers\Library\DocumentController::class, 'download'])->name('library.documents.download');
+    Route::put('/library/documents/{document}', [\App\Http\Controllers\Library\DocumentController::class, 'update'])->name('library.documents.update');
+    Route::delete('/library/documents/{document}', [\App\Http\Controllers\Library\DocumentController::class, 'destroy'])->name('library.documents.destroy');
 });
 
 Route::middleware('auth')->group(function () {
