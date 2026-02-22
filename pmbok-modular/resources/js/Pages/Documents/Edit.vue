@@ -21,10 +21,10 @@ import { common, createLowlight } from 'lowlight';
 import Image from '@tiptap/extension-image';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import EditorToolbar from '@/Components/EditorToolbar.vue';
-import DocumentVersionHistory from '@/Components/DocumentVersionHistory.vue';
+import DocumentRightPanel from '@/Components/DocumentRightPanel.vue';
 import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
-    Menu, X, ListTree, History, GitCompare,
+    Menu, X, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
     Link2Off, ExternalLink, Download
 } from 'lucide-vue-next';
@@ -249,10 +249,9 @@ onBeforeUnmount(() => {
     // Moved to the second onBeforeUnmount with the table event listeners
 });
 
-// Table of Contents logic
+// Document Right Panel logic
 const tocItems = ref([]);
-const showToc = ref(true);
-const tocTab = ref('index');
+const showRightPanel = ref(true);
 const versionHistory = ref([]);
 
 async function loadVersions() {
@@ -411,8 +410,8 @@ const scrollToHeading = (id) => {
     setTimeout(() => window.scrollBy(0, -100), 50);
 };
 
-const toggleToc = () => {
-    showToc.value = !showToc.value;
+const toggleRightPanel = () => {
+    showRightPanel.value = !showRightPanel.value;
 };
 
 const handleTitleChange = () => {
@@ -584,61 +583,19 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- Table of Contents Sidebar -->
-            <div :class="[
-                'transition-all duration-300 ease-in-out border-l bg-gray-50/50 min-h-[calc(100vh-65px)] sticky top-0 self-start',
-                showToc ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden border-l-0'
-            ]">
-                <div class="p-4 sticky top-4 w-64" v-if="showToc">
-                    <div class="flex items-center gap-1 mb-4">
-                        <button @click="tocTab = 'index'"
-                            :class="['p-2 rounded-md transition', tocTab === 'index' ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700']"
-                            title="Índice">
-                            <ListTree class="w-4 h-4" />
-                        </button>
-                        <button @click="tocTab = 'history'"
-                            :class="['p-2 rounded-md transition', tocTab === 'history' ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700']"
-                            title="Histórico de Versões">
-                            <History class="w-4 h-4" />
-                        </button>
-                        <button @click="toggleToc"
-                            class="ml-auto p-2 rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                            title="Fechar">
-                            <X class="w-4 h-4" />
-                        </button>
-                    </div>
-                    <div v-if="tocTab === 'index'">
-                        <div v-if="tocItems.length === 0" class="text-sm text-gray-400 italic">
-                            Nenhum título no documento. Adicione títulos (H1, H2, H3) para vê-los aqui.
-                        </div>
-                        <ul v-else class="space-y-1.5 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
-                            <li v-for="item in tocItems" :key="item.id">
-                                <button @click="scrollToHeading(item.id)" :class="[
-                                    'text-left w-full text-sm hover:text-primary hover:bg-primary/5 transition-colors px-2 py-1 rounded line-clamp-2',
-                                    item.level === 1 ? 'font-semibold text-gray-800' : '',
-                                    item.level === 2 ? 'font-medium text-gray-600 pl-4' : '',
-                                    item.level === 3 ? 'text-gray-500 pl-8 text-xs' : ''
-                                ]" :title="item.text">
-                                    {{ item.text }}
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                    <div v-else-if="tocTab === 'history'">
-                        <DocumentVersionHistory :versions="versionHistory" :active-version-id="versionModal.version?.id"
-                            @open-version-modal="openVersionModal" @save-version="saveVersion"
-                            @delete-version="deleteVersion" @export-version="v => exportToPdf(v.id)" />
-                    </div>
-                </div>
-            </div>
+            <!-- Right Panel Sidebar -->
+            <DocumentRightPanel v-model:show="showRightPanel" :toc-items="tocItems" :version-history="versionHistory"
+                :active-version-id="versionModal.version?.id" @scroll-to-heading="scrollToHeading"
+                @open-version-modal="openVersionModal" @save-version="saveVersion" @delete-version="deleteVersion"
+                @export-version="v => exportToPdf(v)" />
 
 
         </div>
 
-        <!-- Floating Toggle TOC Button (visible when TOC is hidden) -->
-        <button v-if="!showToc" @click="toggleToc"
+        <!-- Floating Toggle Panel Button (visible when Panel is hidden) -->
+        <button v-if="!showRightPanel" @click="toggleRightPanel"
             class="fixed right-6 top-24 z-20 p-2 bg-white rounded-full shadow-[0_4px_10px_-1px_rgba(0,0,0,0.1)] border hover:bg-gray-50 hover:text-primary transition text-gray-400"
-            title="Mostrar Índice">
+            title="Mostrar Painel">
             <Menu class="w-5 h-5" />
         </button>
 
