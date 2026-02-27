@@ -22,6 +22,7 @@
     },
     "dependencies": {
         "@boopathyganesh/tiptap-pages": "^2.1.1",
+        "@inertiajs/inertia": "^0.11.1",
         "@tanstack/vue-table": "^8.21.3",
         "@tiptap/extension-code-block-lowlight": "^3.20.0",
         "@tiptap/extension-collaboration": "^3.20.0",
@@ -29,6 +30,7 @@
         "@tiptap/extension-highlight": "^3.20.0",
         "@tiptap/extension-image": "^3.20.0",
         "@tiptap/extension-link": "^3.20.0",
+        "@tiptap/extension-mention": "^3.20.0",
         "@tiptap/extension-placeholder": "^3.20.0",
         "@tiptap/extension-table": "^3.20.0",
         "@tiptap/extension-table-cell": "^3.20.0",
@@ -41,12 +43,14 @@
         "@tiptap/extension-unique-id": "^3.20.0",
         "@tiptap/pm": "^3.20.0",
         "@tiptap/starter-kit": "^3.20.0",
+        "@tiptap/suggestion": "^3.20.0",
         "@tiptap/vue-3": "^3.20.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "diff-match-patch": "^1.0.5",
         "lowlight": "^3.3.0",
         "lucide-vue-next": "^0.574.0",
+        "pinia": "^2.3.1",
         "radix-vue": "^1.9.17",
         "tailwind-merge": "^3.5.0"
     }

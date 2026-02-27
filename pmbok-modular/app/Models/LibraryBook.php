@@ -4,11 +4,27 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class LibraryBook extends Model
 {
     use HasFactory;
     protected $guarded = [];
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image) {
+            return null;
+        }
+
+        if (Str::startsWith($this->image, ['http://', 'https://', '//'])) {
+            return $this->image;
+        }
+
+        return Storage::disk('s3')->url($this->image);
+    }
 
     public function folders()
     {

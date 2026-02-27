@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\AgendaTaskController;
+use App\Http\Controllers\AgendaReminderController;
+use App\Http\Controllers\TaskMessageController;
+use App\Http\Controllers\TaskValidationController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +24,29 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/agenda', [AgendaTaskController::class, 'index'])->name('agenda.index');
+    // JSON endpoint to fetch tasks for a given date (used by AJAX to avoid full Inertia visit)
+    Route::get('/agenda/tasks/list', [AgendaTaskController::class, 'list'])->name('agenda.tasks.list');
+    Route::get('/agenda/tasks/participating', [AgendaTaskController::class, 'participating'])->name('agenda.tasks.participating');
+    Route::post('/agenda/tasks', [AgendaTaskController::class, 'store'])->name('agenda.tasks.store');
+    Route::delete('/agenda/tasks/{agendaTask}', [AgendaTaskController::class, 'destroy'])->name('agenda.tasks.destroy');
+    Route::get('/agenda/users', [AgendaTaskController::class, 'users'])->name('agenda.users');
+
+    // ── Reminders ─────────────────────────────────────────────────────────────
+    Route::get('/agenda/reminders', [AgendaReminderController::class, 'index'])->name('agenda.reminders.index');
+    Route::post('/agenda/reminders', [AgendaReminderController::class, 'store'])->name('agenda.reminders.store');
+    Route::delete('/agenda/reminders/{reminder}', [AgendaReminderController::class, 'destroy'])->name('agenda.reminders.destroy');
+
+    // ── Task Chat: Messages & Validations ─────────────────────────────────────
+    Route::prefix('agenda/tasks/{task}')->group(function () {
+        Route::get('messages',                              [TaskMessageController::class,    'index'])  ->name('agenda.tasks.messages.index');
+        Route::post('messages',                             [TaskMessageController::class,    'store'])  ->name('agenda.tasks.messages.store');
+        Route::get('validations',                           [TaskValidationController::class, 'index'])  ->name('agenda.tasks.validations.index');
+        Route::post('validations',                          [TaskValidationController::class, 'store'])  ->name('agenda.tasks.validations.store');
+        Route::post('validations/{validation}/approve',     [TaskValidationController::class, 'approve'])->name('agenda.tasks.validations.approve');
+        Route::post('validations/{validation}/reject',      [TaskValidationController::class, 'reject']) ->name('agenda.tasks.validations.reject');
+    });
+
     Route::get('/library', [\App\Http\Controllers\LibraryController::class, 'index'])->name('library.index');
 
     // Knowledge Base / Library Routes

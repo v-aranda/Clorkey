@@ -17,7 +17,7 @@ class LibraryBookSeeder extends Seeder
             'color' => 'bg-purple-600',
             'text_color' => 'text-white',
             'icon' => 'Brain',
-            'image' => null,
+            'image' => 'https://placehold.co/256x256/png?text=Base+de+Conhecimento',
         ]);
     }
 }

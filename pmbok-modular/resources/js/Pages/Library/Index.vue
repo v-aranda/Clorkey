@@ -194,7 +194,7 @@ onMounted(() => {
                     class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 justify-items-center">
                     <Link v-for="book in books" :key="book.id" :href="route('library.show', book.id)">
                         <BookCard :color="book.color" :text-color="book.text_color" :icon="book.icon"
-                            :image="book.image">
+                            :image="book.image_url || book.image">
                             {{ book.title }}
                         </BookCard>
                     </Link>

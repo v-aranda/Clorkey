@@ -9,7 +9,7 @@ const props = defineProps({
     size: {
         type: String,
         default: 'md',
-        validator: (v) => ['sm', 'md', 'lg', 'xl'].includes(v),
+        validator: (v) => ['xs', 'sm', 'md', 'lg', 'xl'].includes(v),
     },
 })
 
@@ -42,6 +42,7 @@ const bgColor = computed(() => {
 
 const sizeClasses = computed(() => {
     const map = {
+        xs: 'h-6 w-6 text-[10px]',
         sm: 'h-8 w-8 text-xs',
         md: 'h-10 w-10 text-sm',
         lg: 'h-16 w-16 text-xl',
