@@ -1,0 +1,47 @@
+# Dependências (instaladas dentro do container)
+node_modules/
+vendor/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Arquivos de ambiente (nunca copiar secrets para a imagem)
+.env
+.env.local
+.env.*.local
+
+# Assets buildados (o builder stage os gera do zero)
+public/build/
+public/hot
+
+# Logs e cache (conteúdo, não as pastas)
+storage/logs/*
+!storage/logs/.gitignore
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+
+# Testes
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# Ferramentas de dev
+.editorconfig
+.php-cs-fixer.php
+.pint.json
+phpstan.neon
+.phpactor.json
+jsconfig.json
+
+# Docs
+README.md
+DEPLOY_COOLIFY.md
+*.md
+
+# Docker (não copiar Dockerfile/dockerignore para dentro da imagem)
+Dockerfile
+.dockerignore

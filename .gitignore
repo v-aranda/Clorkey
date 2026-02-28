@@ -1,0 +1,16 @@
+# Variáveis de ambiente (nunca commitar secrets)
+.env
+
+# Dados persistidos pelos containers (não devem ir para o repositório)
+volumes/db/*
+volumes/redis/*
+volumes/minio/*
+!volumes/db/.gitkeep
+!volumes/redis/.gitkeep
+!volumes/minio/.gitkeep
+
+# IDE e ferramentas
+.idea/
+.vscode/
+*.swp
+*.swo
