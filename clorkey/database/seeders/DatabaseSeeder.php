@@ -31,5 +31,8 @@ class DatabaseSeeder extends Seeder
                 'deleted_at' => null,
             ]
         );
+
+        // Ensure the default Knowledge Base book exists after a clean setup.
+        $this->call(LibraryBookSeeder::class);
     }
 }
