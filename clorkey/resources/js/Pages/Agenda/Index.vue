@@ -84,6 +84,9 @@ const detailTask = ref(null);
 
 const showTaskPanel = ref(false);
 const selectedHour = ref(null);
+const panelTask = ref(null);
+const panelRequireDateTime = ref(true);
+const panelContext = ref('default');
 
 // ─── Current date label for the header ───────────────────────────────────────
 
@@ -94,7 +97,18 @@ const headerDateLabel = computed(() =>
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
 function openTaskPanel(hour) {
+    panelTask.value = null;
+    panelRequireDateTime.value = true;
+    panelContext.value = 'default';
     selectedHour.value = hour;
+    showTaskPanel.value = true;
+}
+
+function openAssignedTaskPanel(task) {
+    panelTask.value = task;
+    panelRequireDateTime.value = false;
+    panelContext.value = 'assigned';
+    selectedHour.value = null;
     showTaskPanel.value = true;
 }
 
@@ -114,7 +128,58 @@ function handleTaskDeleted(taskId) {
 }
 
 function onTodoListRequested() {
-    agendaStore.fetchParticipatingTasks();
+    agendaStore.fetchAssignedTasks();
+}
+
+async function handleTaskSaved() {
+    await agendaStore.fetchAssignedTasks({ force: true });
+    await agendaStore.fetchTasksForDate(formatDateToYMD(calendarDate.value));
+}
+
+async function handleAssignedTaskDropped(payload) {
+    const taskId = Number(payload?.taskId);
+    if (!taskId || !payload?.date || !payload?.start_time) return;
+
+    const sourceTask = agendaStore.assignedTasks.find((item) => Number(item.id) === taskId);
+    if (!sourceTask) return;
+
+    const previousAssigned = [...agendaStore.assignedTasks];
+    const previousTimeline = [...agendaStore.tasks];
+
+    const optimisticTask = {
+        ...sourceTask,
+        date: payload.date,
+        start_time: payload.start_time,
+    };
+
+    agendaStore.removeAssignedTask(taskId);
+    agendaStore.upsertScheduledTask(optimisticTask);
+
+    try {
+        const updatedTask = await agendaStore.updateTask(taskId, {
+            date: payload.date,
+            start_time: payload.start_time,
+            context: 'drag_drop',
+        });
+
+        if (!updatedTask) {
+            throw new Error('Resposta inválida ao atualizar tarefa.');
+        }
+
+        if (updatedTask.date && updatedTask.start_time) {
+            agendaStore.removeAssignedTask(taskId);
+            agendaStore.upsertScheduledTask(updatedTask);
+        } else {
+            agendaStore.removeScheduledTask(taskId);
+            agendaStore.upsertAssignedTask(updatedTask);
+        }
+
+        triggerToast('Tarefa agendada com sucesso.');
+    } catch (error) {
+        agendaStore.setAssignedTasks(previousAssigned);
+        agendaStore.setTasks(previousTimeline);
+        triggerToast('Não foi possível agendar a tarefa. Tente novamente.');
+    }
 }
 </script>
 
@@ -151,8 +216,10 @@ function onTodoListRequested() {
                     :is-night="isNight"
                     :reminders="reminders"
                     :holidays="holidaysForDay"
+                    :selected-date="formatDateToYMD(calendarDate)"
                     @open-task-panel="openTaskPanel"
                     @open-task-detail="openTaskDetail"
+                    @schedule-assigned-task="handleAssignedTaskDropped"
                 />
             </div>
 
@@ -161,8 +228,8 @@ function onTodoListRequested() {
                 v-model:show="showOffcanvas"
                 v-model:activeTab="activeOffcanvasTab"
                 :theme="theme"
-                :participating-tasks="agendaStore.participatingTasks"
-                :loading-participating="agendaStore.loadingParticipating"
+                :assigned-tasks="agendaStore.assignedTasks"
+                :loading-assigned="agendaStore.loadingAssigned"
                 :users="users"
                 :calendar-date="calendarDate"
                 :month-label="monthLabel"
@@ -179,8 +246,9 @@ function onTodoListRequested() {
                 :reminder-dot-dates="reminderDotDates"
                 :reminders-loading="remindersLoading"
                 :current-user-id="page.props.auth.user?.id"
-                @open-todo-list="onTodoListRequested"
-                @open-task-detail="openTaskDetail"
+                @open-assigned-list="onTodoListRequested"
+                @create-task="openTaskPanel(null)"
+                @open-task-form="openAssignedTaskPanel"
                 @select-calendar-day="selectCalendarDay"
                 @select-today="selectToday"
                 @prev-month="prevMonth"
@@ -207,7 +275,12 @@ function onTodoListRequested() {
             :users="users"
             :initial-hour="selectedHour"
             :initial-date="formatDateToYMD(calendarDate)"
+            :task="panelTask"
+            :require-date-time="panelRequireDateTime"
+            :context="panelContext"
             @close="showTaskPanel = false"
+            @created="handleTaskSaved"
+            @updated="handleTaskSaved"
         />
 
         <!-- Toast -->

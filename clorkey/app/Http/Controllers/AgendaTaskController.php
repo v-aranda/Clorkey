@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAgendaTaskRequest;
+use App\Http\Requests\UpdateAgendaTaskRequest;
 use App\Models\AgendaTask;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,7 @@ class AgendaTaskController extends Controller
         $date = request('date') ? Carbon::createFromFormat('Y-m-d', request('date'))->startOfDay() : today();
 
         $tasksQuery = AgendaTask::where('user_id', auth()->id())
+            ->with('user:id,name,email,avatar_path')
             ->whereDate('date', $date)
             ->orderBy('start_time')
             ->get();
@@ -36,7 +38,11 @@ class AgendaTaskController extends Controller
                     'start_time' => $t->start_time,
                 ])->all(),
             ]);
-            $allUserTasks = AgendaTask::where('user_id', auth()->id())->orderBy('date')->orderBy('start_time')->limit(200)->get();
+            $allUserTasks = AgendaTask::where('user_id', auth()->id())
+                ->orderBy('date')
+                ->orderBy('start_time')
+                ->limit(200)
+                ->get();
             \Log::info('Agenda@index - all user tasks', [
                 'user_id' => auth()->id(),
                 'all_count' => $allUserTasks->count(),
@@ -83,12 +89,12 @@ class AgendaTaskController extends Controller
             'user_id'     => auth()->id(),
             'name'        => $data['name'],
             'description' => $data['description'] ?? null,
-            'start_time'  => $data['start_time'],
+            'start_time'  => $data['start_time'] ?? null,
             'end_time'         => $data['end_time'] ?? null,
             'participants' => $participants,
         ];
 
-        if ($recurrence) {
+        if ($recurrence && !empty($data['date']) && !empty($data['start_time'])) {
             $groupId = (string) Str::uuid();
             $now = now();
 
@@ -143,12 +149,49 @@ class AgendaTaskController extends Controller
                 ], $dates));
             }
         } else {
-            AgendaTask::create([...$base, 'date' => $data['date']]);
+            AgendaTask::create([...$base, 'date' => $data['date'] ?? null]);
         }
 
+        $redirectDate = $data['date'] ?? today()->toDateString();
+
         return redirect()
-            ->route('agenda.index', ['date' => $data['date']])
+            ->route('agenda.index', ['date' => $redirectDate])
             ->with('success', 'Tarefa criada com sucesso.');
+    }
+
+    public function update(UpdateAgendaTaskRequest $request, AgendaTask $agendaTask): RedirectResponse|JsonResponse
+    {
+        abort_unless($this->canManageTask($agendaTask), 403);
+
+        $data = $request->validated();
+
+        $agendaTask->fill([
+            'name' => $data['name'] ?? $agendaTask->name,
+            'description' => array_key_exists('description', $data) ? $data['description'] : $agendaTask->description,
+            'date' => array_key_exists('date', $data) ? $data['date'] : $agendaTask->date,
+            'start_time' => array_key_exists('start_time', $data) ? $data['start_time'] : $agendaTask->start_time,
+            'end_time' => array_key_exists('end_time', $data) ? $data['end_time'] : $agendaTask->end_time,
+            'participants' => array_key_exists('participants', $data) ? $data['participants'] : $agendaTask->participants,
+        ]);
+
+        // Keep schedule integrity: if one part of start datetime is missing, unset both.
+        if (is_null($agendaTask->date) || is_null($agendaTask->start_time)) {
+            $agendaTask->date = null;
+            $agendaTask->start_time = null;
+            $agendaTask->end_time = null;
+        }
+
+        $agendaTask->save();
+        $agendaTask->loadMissing('user:id,name,email,avatar_path');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'task' => $this->formatTask($agendaTask),
+                'message' => 'Tarefa atualizada com sucesso.',
+            ]);
+        }
+
+        return back()->with('success', 'Tarefa atualizada com sucesso.');
     }
 
     public function destroy(AgendaTask $agendaTask): RedirectResponse
@@ -185,6 +228,7 @@ class AgendaTaskController extends Controller
         }
 
         $tasks = AgendaTask::where('user_id', auth()->id())
+            ->with('user:id,name,email,avatar_path')
             ->whereDate('date', $date)
             ->orderBy('start_time')
             ->get()
@@ -198,10 +242,29 @@ class AgendaTaskController extends Controller
         $userId = auth()->id();
 
         $tasks = AgendaTask::whereJsonContains('participants', $userId)
+            ->with('user:id,name,email,avatar_path')
             ->orderBy('date')
             ->orderBy('start_time')
             ->get()
             ->map(fn($task) => $this->formatTask($task));
+
+        return response()->json(['tasks' => $tasks]);
+    }
+
+    public function assigned(Request $request): JsonResponse
+    {
+        $userId = auth()->id();
+
+        $tasks = AgendaTask::query()
+            ->with('user:id,name,email,avatar_path')
+            ->whereJsonContains('participants', $userId)
+            ->where(function ($query) {
+                $query->whereNull('date')
+                    ->orWhereNull('start_time');
+            })
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($task) => $this->formatTask($task));
 
         return response()->json(['tasks' => $tasks]);
     }
@@ -224,7 +287,28 @@ class AgendaTaskController extends Controller
                 ->unique()
                 ->values()
                 ->all(),
+            'creator'             => [
+                'id' => $task->user?->id,
+                'name' => $task->user?->name ?? 'Usuário',
+                'email' => $task->user?->email,
+                'avatar_url' => $task->user?->avatar_url,
+            ],
         ];
+    }
+
+    private function canManageTask(AgendaTask $task): bool
+    {
+        $userId = auth()->id();
+
+        if ($task->user_id === $userId) {
+            return true;
+        }
+
+        $participants = collect($task->participants ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return in_array((int) $userId, $participants, true);
     }
 
     /**

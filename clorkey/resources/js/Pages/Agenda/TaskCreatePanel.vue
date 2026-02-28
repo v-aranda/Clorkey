@@ -11,9 +11,12 @@ const props = defineProps({
     users: { type: Array, default: () => [] },
     initialHour: { type: Number, default: null },
     initialDate: { type: String, default: '' },
+    task: { type: Object, default: null },
+    requireDateTime: { type: Boolean, default: true },
+    context: { type: String, default: 'default' },
 });
 
-const emit = defineEmits(['close', 'created']);
+const emit = defineEmits(['close', 'created', 'updated']);
 
 // ─── Task form ────────────────────────────────────────────────────────────────
 const taskForm = useForm({
@@ -24,7 +27,11 @@ const taskForm = useForm({
     end_time: '',
     participants: [],
     recurrence: null,
+    context: 'default',
 });
+
+const isEditing = computed(() => Boolean(props.task?.id));
+const panelTitle = computed(() => isEditing.value ? 'Editar Tarefa' : 'Nova Tarefa');
 
 const { editor, taskImageInput, triggerImageUpload, onImageSelected, insertLink } = useTiptapEditor({
     users: computed(() => props.users),
@@ -91,10 +98,11 @@ watch(recurrenceType, (val) => {
 });
 
 // ─── Reset on open ────────────────────────────────────────────────────────────
-watch(() => props.show, (val) => {
-    if (!val) return;
+function resetFormForCreate() {
     taskForm.reset();
     taskForm.clearErrors();
+    taskForm.name = '';
+    taskForm.description = '';
     taskForm.date = props.initialDate || '';
     taskForm.start_time = props.initialHour != null
         ? `${String(props.initialHour).padStart(2, '0')}:00`
@@ -102,14 +110,46 @@ watch(() => props.show, (val) => {
     taskForm.end_time = null;
     taskForm.participants = [];
     taskForm.recurrence = null;
-    recurrenceEnabled.value  = false;
-    recurrenceType.value     = 'weekly';
+    taskForm.context = props.context || 'default';
+    recurrenceEnabled.value = false;
+    recurrenceType.value = 'weekly';
     recurrenceInterval.value = 1;
-    recurrenceDays.value     = taskForm.date
+    recurrenceDays.value = taskForm.date
         ? [new Date(taskForm.date + 'T12:00:00').getDay()]
         : [];
-    recurrenceEndDate.value  = '';
+    recurrenceEndDate.value = '';
     nextTick(() => { editor.value?.commands.setContent(''); });
+}
+
+function resetFormForEdit() {
+    taskForm.reset();
+    taskForm.clearErrors();
+    taskForm.name = props.task?.name || '';
+    taskForm.description = props.task?.description || '';
+    taskForm.date = props.task?.date || '';
+    taskForm.start_time = props.task?.start_time || '';
+    taskForm.end_time = props.task?.end_time || null;
+    taskForm.participants = Array.isArray(props.task?.participants) ? [...props.task.participants] : [];
+    taskForm.recurrence = null;
+    taskForm.context = props.context || 'default';
+    recurrenceEnabled.value = false;
+    recurrenceType.value = 'weekly';
+    recurrenceInterval.value = 1;
+    recurrenceDays.value = taskForm.date
+        ? [new Date(taskForm.date + 'T12:00:00').getDay()]
+        : [];
+    recurrenceEndDate.value = '';
+    nextTick(() => { editor.value?.commands.setContent(taskForm.description || ''); });
+}
+
+watch(() => props.show, (val) => {
+    if (!val) return;
+    if (isEditing.value) {
+        resetFormForEdit();
+        return;
+    }
+
+    resetFormForCreate();
 });
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
@@ -117,7 +157,19 @@ function submitTask() {
     if (editor.value) {
         taskForm.description = editor.value.getHTML();
     }
+    if (!taskForm.date || taskForm.date.trim() === '') {
+        taskForm.date = null;
+    }
+    if (!taskForm.start_time || taskForm.start_time.trim() === '') {
+        taskForm.start_time = null;
+    }
     if (!taskForm.end_time || taskForm.end_time.trim() === '') {
+        taskForm.end_time = null;
+    }
+
+    if (!props.requireDateTime && (!taskForm.date || !taskForm.start_time)) {
+        taskForm.date = null;
+        taskForm.start_time = null;
         taskForm.end_time = null;
     }
 
@@ -127,6 +179,23 @@ function submitTask() {
         days_of_week: recurrenceType.value === 'weekly' ? [...recurrenceDays.value] : undefined,
         end_date:     recurrenceEndDate.value,
     } : null;
+
+    if (!taskForm.date || !taskForm.start_time) {
+        taskForm.recurrence = null;
+    }
+
+    taskForm.context = props.context || 'default';
+
+    if (isEditing.value && props.task?.id) {
+        taskForm.put(route('agenda.tasks.update', props.task.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                emit('updated');
+                emit('close');
+            },
+        });
+        return;
+    }
 
     taskForm.post(route('agenda.tasks.store'), {
         preserveScroll: true,
@@ -149,7 +218,7 @@ function submitTask() {
 
                 <!-- Header -->
                 <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
-                    <h2 class="text-lg font-semibold text-gray-900">Nova Tarefa</h2>
+                    <h2 class="text-lg font-semibold text-gray-900">{{ panelTitle }}</h2>
                     <button @click="$emit('close')" class="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
                         <X class="h-5 w-5" />
                     </button>
@@ -385,7 +454,7 @@ function submitTask() {
                                 :disabled="taskForm.processing"
                                 class="flex-1 inline-flex items-center justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-50 transition-colors"
                             >
-                                {{ taskForm.processing ? 'Salvando...' : (recurrenceEnabled ? 'Criar Série' : 'Criar Tarefa') }}
+                                {{ taskForm.processing ? 'Salvando...' : (isEditing ? 'Salvar alterações' : (recurrenceEnabled ? 'Criar Série' : 'Criar Tarefa')) }}
                             </button>
                             <button
                                 type="button"

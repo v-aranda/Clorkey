@@ -12,9 +12,10 @@ const props = defineProps({
     isNight: { type: Boolean, default: false },
     reminders: { type: Array, default: () => [] },
     holidays: { type: Array, default: () => [] },
+    selectedDate: { type: String, default: '' },
 });
 
-const emit = defineEmits(['open-task-panel', 'open-task-detail']);
+const emit = defineEmits(['open-task-panel', 'open-task-detail', 'schedule-assigned-task']);
 
 const allSlots = Array.from({ length: 18 }, (_, i) => i + 6); // 6..23
 
@@ -22,6 +23,7 @@ const SLOT_BASE_HEIGHT = 80;
 const SLOT_EXTRA_PER_TASK = 56;
 
 const scheduleRef = ref(null);
+const activeDropHour = ref(null);
 
 onMounted(() => {
     nextTick(() => {
@@ -57,6 +59,45 @@ function stripHtml(html) {
 function getUser(id) {
     const nid = Number(id);
     return props.users.find(u => Number(u.id) === nid) ?? { id: nid, name: 'Usuário', avatar_url: null };
+}
+
+function getDraggedTaskId(dataTransfer) {
+    if (!dataTransfer) return null;
+
+    const explicitId = dataTransfer.getData('application/x-agenda-task');
+    const fallbackId = dataTransfer.getData('text/plain');
+    const parsed = Number(explicitId || fallbackId);
+
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function onSlotDragOver(event, hour) {
+    const taskId = getDraggedTaskId(event?.dataTransfer);
+    if (!taskId) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    activeDropHour.value = hour;
+}
+
+function onSlotDragLeave(hour) {
+    if (activeDropHour.value === hour) {
+        activeDropHour.value = null;
+    }
+}
+
+function onSlotDrop(event, hour) {
+    const taskId = getDraggedTaskId(event?.dataTransfer);
+    if (!taskId || !props.selectedDate) return;
+
+    event.preventDefault();
+    activeDropHour.value = null;
+
+    emit('schedule-assigned-task', {
+        taskId,
+        date: props.selectedDate,
+        start_time: `${String(hour).padStart(2, '0')}:00`,
+    });
 }
 </script>
 
@@ -114,9 +155,13 @@ function getUser(id) {
                             'flex-1 cursor-pointer border-t px-3 py-2 transition-colors duration-300',
                             theme.slotBorder,
                             theme.slotHover,
+                            activeDropHour === hour ? 'bg-primary/10 ring-2 ring-primary/60 ring-inset' : '',
                             'group'
                         ]"
                         @click="$emit('open-task-panel', hour)"
+                        @dragover="onSlotDragOver($event, hour)"
+                        @dragleave="onSlotDragLeave(hour)"
+                        @drop="onSlotDrop($event, hour)"
                     >
                         <!-- Tasks as post-its -->
                         <div v-if="tasksForHour(hour).length" class="flex flex-col gap-2 pt-1">

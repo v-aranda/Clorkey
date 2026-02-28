@@ -1,15 +1,15 @@
 <script setup>
 import { CalendarDays, Users, X } from 'lucide-vue-next';
 import MiniCalendar from './MiniCalendar.vue';
-import ParticipatingTasksList from './ParticipatingTasksList.vue';
+import AssignedTasksList from './AssignedTasksList.vue';
 import ReminderList from './ReminderList.vue';
 
 const props = defineProps({
     show: { type: Boolean, default: false },
     activeTab: { type: String, default: 'calendar' }, // 'calendar' | 'todolist'
     theme: { type: Object, required: true },
-    participatingTasks: { type: Array, default: () => [] },
-    loadingParticipating: { type: Boolean, default: false },
+    assignedTasks: { type: Array, default: () => [] },
+    loadingAssigned: { type: Boolean, default: false },
     users: { type: Array, default: () => [] },
     // MiniCalendar props
     calendarDate: { type: Date, required: true },
@@ -33,7 +33,9 @@ const props = defineProps({
 const emit = defineEmits([
     'update:show',
     'update:activeTab',
-    'open-todo-list',
+    'open-assigned-list',
+    'create-task',
+    'open-task-form',
     'open-task-detail',
     'select-calendar-day',
     'select-today',
@@ -51,7 +53,7 @@ function openCalendar() {
 function openTodoList() {
     emit('update:activeTab', 'todolist');
     emit('update:show', true);
-    emit('open-todo-list');
+    emit('open-assigned-list');
 }
 </script>
 
@@ -169,11 +171,11 @@ function openTodoList() {
 
                     <!-- Todo list tab -->
                     <div v-else>
-                        <ParticipatingTasksList
-                            :tasks="participatingTasks"
-                            :loading="loadingParticipating"
-                            :users="users"
-                            @open-task="(task, evt) => $emit('open-task-detail', task, evt)"
+                        <AssignedTasksList
+                            :tasks="assignedTasks"
+                            :loading="loadingAssigned"
+                            @create-task="$emit('create-task')"
+                            @open-task="(task, evt) => $emit('open-task-form', task, evt)"
                         />
                     </div>
 

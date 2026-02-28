@@ -14,14 +14,17 @@ class StoreAgendaTaskRequest extends FormRequest
 
     public function rules(): array
     {
+        $requiresDateTime = $this->input('context') !== 'assigned';
+
         return [
             'name'                            => ['required', 'string', 'max:255'],
             'description'                     => ['nullable', 'string'],
-            'date'                            => ['required', 'date'],
-            'start_time'                      => ['required', 'date_format:H:i'],
+            'date'                            => $requiresDateTime ? ['required', 'date'] : ['nullable', 'date'],
+            'start_time'                      => $requiresDateTime ? ['required', 'date_format:H:i'] : ['nullable', 'date_format:H:i'],
             'end_time'                        => ['nullable', 'date_format:H:i', 'after:start_time'],
             'participants'                    => ['nullable', 'array'],
             'participants.*'                  => ['integer', 'exists:users,id'],
+            'context'                         => ['nullable', 'string'],
             // Recorrência
             'recurrence'                      => ['nullable', 'array'],
             'recurrence.type'                 => ['required_with:recurrence', Rule::in(['daily', 'weekly', 'monthly', 'yearly'])],
@@ -61,6 +64,12 @@ class StoreAgendaTaskRequest extends FormRequest
 
         $this->merge([
             'participants' => $participants,
+            'date' => $this->filled('date') && trim((string) $this->input('date')) !== ''
+                ? $this->input('date')
+                : null,
+            'start_time' => $this->filled('start_time') && trim((string) $this->input('start_time')) !== ''
+                ? $this->input('start_time')
+                : null,
             'end_time' => $this->filled('end_time') && trim((string) $this->input('end_time')) !== ''
                 ? $this->input('end_time')
                 : null,

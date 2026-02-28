@@ -24,7 +24,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // JSON endpoint to fetch tasks for a given date (used by AJAX to avoid full Inertia visit)
     Route::get('/agenda/tasks/list', [AgendaTaskController::class, 'list'])->name('agenda.tasks.list');
     Route::get('/agenda/tasks/participating', [AgendaTaskController::class, 'participating'])->name('agenda.tasks.participating');
+    Route::get('/agenda/tasks/assigned', [AgendaTaskController::class, 'assigned'])->name('agenda.tasks.assigned');
     Route::post('/agenda/tasks', [AgendaTaskController::class, 'store'])->name('agenda.tasks.store');
+    Route::patch('/agenda/tasks/{agendaTask}', [AgendaTaskController::class, 'update'])->name('agenda.tasks.update');
     Route::delete('/agenda/tasks/{agendaTask}', [AgendaTaskController::class, 'destroy'])->name('agenda.tasks.destroy');
     Route::get('/agenda/users', [AgendaTaskController::class, 'users'])->name('agenda.users');
 
@@ -98,4 +100,3 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 });
 
 require __DIR__ . '/auth.php';
-
