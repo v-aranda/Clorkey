@@ -75,6 +75,10 @@ const intervalUnit = computed(() => {
     }
 });
 
+const canConfigureRecurrence = computed(() =>
+    Boolean(taskForm.date && taskForm.start_time)
+);
+
 function toggleDay(dow) {
     const idx = recurrenceDays.value.indexOf(dow);
     if (idx >= 0) {
@@ -95,6 +99,13 @@ watch(recurrenceType, (val) => {
         recurrenceDays.value = [new Date(taskForm.date + 'T12:00:00').getDay()];
     }
     recurrenceInterval.value = Math.min(recurrenceInterval.value, intervalMax.value);
+});
+
+watch(canConfigureRecurrence, (enabled) => {
+    if (enabled) return;
+
+    recurrenceEnabled.value = false;
+    taskForm.recurrence = null;
 });
 
 // ─── Reset on open ────────────────────────────────────────────────────────────
@@ -263,7 +274,7 @@ function submitTask() {
                         </div>
 
                         <!-- Recurrence section -->
-                        <div class="rounded-lg border border-gray-200 overflow-hidden">
+                        <div v-if="canConfigureRecurrence" class="rounded-lg border border-gray-200 overflow-hidden">
                             <!-- Toggle header -->
                             <button
                                 type="button"
@@ -376,6 +387,10 @@ function submitTask() {
 
                             </div>
                         </div>
+
+                        <p v-else class="text-xs text-muted-foreground">
+                            Preencha data e horário para habilitar recorrência.
+                        </p>
 
                         <!-- Description (TipTap) -->
                         <div>

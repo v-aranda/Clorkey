@@ -71,9 +71,21 @@ function getDraggedTaskId(dataTransfer) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function isAgendaTaskDrag(dataTransfer) {
+    if (!dataTransfer) return false;
+
+    const types = Array.from(dataTransfer.types || []);
+
+    // During dragover some browsers only expose MIME types (not payload).
+    if (types.includes('application/x-agenda-task') || types.includes('text/plain')) {
+        return true;
+    }
+
+    return Boolean(getDraggedTaskId(dataTransfer));
+}
+
 function onSlotDragOver(event, hour) {
-    const taskId = getDraggedTaskId(event?.dataTransfer);
-    if (!taskId) return;
+    if (!isAgendaTaskDrag(event?.dataTransfer)) return;
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -87,10 +99,13 @@ function onSlotDragLeave(hour) {
 }
 
 function onSlotDrop(event, hour) {
+    if (!isAgendaTaskDrag(event?.dataTransfer)) return;
+
+    event.preventDefault();
+
     const taskId = getDraggedTaskId(event?.dataTransfer);
     if (!taskId || !props.selectedDate) return;
 
-    event.preventDefault();
     activeDropHour.value = null;
 
     emit('schedule-assigned-task', {
@@ -143,8 +158,8 @@ function onSlotDrop(event, hour) {
                 <div class="flex items-start">
                     <!-- Hour label -->
                     <span :class="[
-                        'w-14 shrink-0 -mt-2.5 pr-4 text-right font-mono text-xs transition-colors duration-500',
-                        theme.hourText
+                        'w-14 shrink-0 -mt-2.5 pr-4 text-right font-mono text-xs transition-colors duration-200',
+                        activeDropHour === hour ? `${theme.dropHourText} font-semibold` : theme.hourText
                     ]">
                         {{ formatHour(hour) }}
                     </span>
@@ -155,7 +170,7 @@ function onSlotDrop(event, hour) {
                             'flex-1 cursor-pointer border-t px-3 py-2 transition-colors duration-300',
                             theme.slotBorder,
                             theme.slotHover,
-                            activeDropHour === hour ? 'bg-primary/10 ring-2 ring-primary/60 ring-inset' : '',
+                            activeDropHour === hour ? theme.dropZoneActive : '',
                             'group'
                         ]"
                         @click="$emit('open-task-panel', hour)"
@@ -163,6 +178,13 @@ function onSlotDrop(event, hour) {
                         @dragleave="onSlotDragLeave(hour)"
                         @drop="onSlotDrop($event, hour)"
                     >
+                        <div
+                            v-if="activeDropHour === hour"
+                            :class="['mb-2 inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold shadow-sm', theme.dropBadge]"
+                        >
+                            Solte para agendar em {{ formatHour(hour) }}
+                        </div>
+
                         <!-- Tasks as post-its -->
                         <div v-if="tasksForHour(hour).length" class="flex flex-col gap-2 pt-1">
                             <div

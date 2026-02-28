@@ -96,6 +96,9 @@ export function useAgendaClock() {
                 dayHover: 'hover:bg-sky-50 hover:text-sky-600',
                 panelIconBg: 'bg-sky-50',
                 panelIconText: 'text-sky-500',
+                dropHourText: 'text-sky-600',
+                dropZoneActive: 'rounded-lg bg-sky-100/75',
+                dropBadge: 'bg-sky-500 text-white',
             };
             case 'afternoon': return {
                 pageBg: 'bg-amber-50/40',
@@ -118,6 +121,9 @@ export function useAgendaClock() {
                 dayHover: 'hover:bg-orange-50 hover:text-orange-600',
                 panelIconBg: 'bg-orange-50',
                 panelIconText: 'text-orange-500',
+                dropHourText: 'text-orange-600',
+                dropZoneActive: 'rounded-lg bg-orange-100/75',
+                dropBadge: 'bg-orange-500 text-white',
             };
             default: return {
                 pageBg: 'bg-indigo-50',
@@ -140,6 +146,9 @@ export function useAgendaClock() {
                 dayHover: 'hover:bg-indigo-100 hover:text-indigo-600',
                 panelIconBg: 'bg-indigo-100',
                 panelIconText: 'text-indigo-600',
+                dropHourText: 'text-indigo-700',
+                dropZoneActive: 'rounded-lg bg-indigo-100/75',
+                dropBadge: 'bg-indigo-500 text-white',
             };
         }
     });

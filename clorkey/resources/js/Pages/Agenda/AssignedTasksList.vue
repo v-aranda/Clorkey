@@ -12,6 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['open-task', 'create-task']);
 
 const draggingTaskId = ref(null);
+const isDragging = ref(false);
 
 const hasTasks = computed(() => props.tasks.length > 0);
 
@@ -28,6 +29,7 @@ function statusLabel(task) {
 function onDragStart(event, task) {
     if (!event?.dataTransfer || !task?.id) return;
 
+    isDragging.value = true;
     draggingTaskId.value = task.id;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/x-agenda-task', String(task.id));
@@ -36,6 +38,18 @@ function onDragStart(event, task) {
 
 function onDragEnd() {
     draggingTaskId.value = null;
+    setTimeout(() => {
+        isDragging.value = false;
+    }, 0);
+}
+
+function onTaskClick(task, event) {
+    if (isDragging.value) {
+        event?.preventDefault();
+        return;
+    }
+
+    emit('open-task', task, event);
 }
 </script>
 
@@ -77,7 +91,7 @@ function onDragEnd() {
                 ]"
                 @dragstart="onDragStart($event, task)"
                 @dragend="onDragEnd"
-                @click="emit('open-task', task, $event)"
+                @click="onTaskClick(task, $event)"
             >
                 <div class="flex items-start gap-2">
                     <GripVertical class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/80" />

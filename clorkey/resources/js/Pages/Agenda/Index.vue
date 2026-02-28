@@ -104,6 +104,14 @@ function openTaskPanel(hour) {
     showTaskPanel.value = true;
 }
 
+function openAssignedTaskCreatePanel() {
+    panelTask.value = null;
+    panelRequireDateTime.value = false;
+    panelContext.value = 'assigned';
+    selectedHour.value = null;
+    showTaskPanel.value = true;
+}
+
 function openAssignedTaskPanel(task) {
     panelTask.value = task;
     panelRequireDateTime.value = false;
@@ -247,7 +255,7 @@ async function handleAssignedTaskDropped(payload) {
                 :reminders-loading="remindersLoading"
                 :current-user-id="page.props.auth.user?.id"
                 @open-assigned-list="onTodoListRequested"
-                @create-task="openTaskPanel(null)"
+                @create-task="openAssignedTaskCreatePanel"
                 @open-task-form="openAssignedTaskPanel"
                 @select-calendar-day="selectCalendarDay"
                 @select-today="selectToday"

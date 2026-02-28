@@ -1,5 +1,5 @@
 <script setup>
-import { CalendarDays, Users, X } from 'lucide-vue-next';
+import { CalendarDays, Inbox, X } from 'lucide-vue-next';
 import MiniCalendar from './MiniCalendar.vue';
 import AssignedTasksList from './AssignedTasksList.vue';
 import ReminderList from './ReminderList.vue';
@@ -84,7 +84,7 @@ function openTodoList() {
                     title="Minha Lista"
                     aria-label="Abrir minha lista"
                 >
-                    <Users class="h-5 w-5" />
+                    <Inbox class="h-5 w-5" />
                 </button>
             </template>
             <template v-else>
@@ -131,7 +131,7 @@ function openTodoList() {
                         ]"
                         title="Minha Lista"
                     >
-                        <Users class="h-4 w-4" />
+                        <Inbox class="h-4 w-4" />
                     </button>
                 </div>
 

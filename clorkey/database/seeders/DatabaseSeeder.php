@@ -12,18 +12,24 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::create([
-            'name' => 'Aurora',
-            'email' => 'aurora@pmbok.sys',
-            'password' => 'admin123',
-            'role' => 'admin',
-        ]);
+        User::withTrashed()->updateOrCreate(
+            ['email' => 'aurora@pmbok.sys'],
+            [
+                'name' => 'Aurora',
+                'password' => 'admin123',
+                'role' => 'admin',
+                'deleted_at' => null,
+            ]
+        );
 
-        User::create([
-            'name' => 'Prisma',
-            'email' => 'prisma@pmbok.sys',
-            'password' => 'user123',
-            'role' => 'user',
-        ]);
+        User::withTrashed()->updateOrCreate(
+            ['email' => 'prisma@pmbok.sys'],
+            [
+                'name' => 'Prisma',
+                'password' => 'user123',
+                'role' => 'user',
+                'deleted_at' => null,
+            ]
+        );
     }
 }
