@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\AgendaDiaryController;
 use App\Http\Controllers\AgendaTaskController;
 use App\Http\Controllers\AgendaReminderController;
 use App\Http\Controllers\TaskMessageController;
@@ -34,6 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/agenda/reminders', [AgendaReminderController::class, 'index'])->name('agenda.reminders.index');
     Route::post('/agenda/reminders', [AgendaReminderController::class, 'store'])->name('agenda.reminders.store');
     Route::delete('/agenda/reminders/{reminder}', [AgendaReminderController::class, 'destroy'])->name('agenda.reminders.destroy');
+    Route::get('/agenda/diary', [AgendaDiaryController::class, 'show'])->name('agenda.diary.show');
+    Route::put('/agenda/diary', [AgendaDiaryController::class, 'upsert'])->name('agenda.diary.upsert');
 
     // ── Task Chat: Messages & Validations ─────────────────────────────────────
     Route::prefix('agenda/tasks/{task}')->group(function () {

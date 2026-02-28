@@ -1,12 +1,13 @@
 <script setup>
-import { CalendarDays, Inbox, X } from 'lucide-vue-next';
+import { BookText, CalendarDays, Inbox, X } from 'lucide-vue-next';
 import MiniCalendar from './MiniCalendar.vue';
 import AssignedTasksList from './AssignedTasksList.vue';
 import ReminderList from './ReminderList.vue';
+import DiaryTab from './DiaryTab.vue';
 
 const props = defineProps({
     show: { type: Boolean, default: false },
-    activeTab: { type: String, default: 'calendar' }, // 'calendar' | 'todolist'
+    activeTab: { type: String, default: 'calendar' }, // 'calendar' | 'diary' | 'todolist'
     theme: { type: Object, required: true },
     assignedTasks: { type: Array, default: () => [] },
     loadingAssigned: { type: Boolean, default: false },
@@ -55,6 +56,11 @@ function openTodoList() {
     emit('update:show', true);
     emit('open-assigned-list');
 }
+
+function openDiary() {
+    emit('update:activeTab', 'diary');
+    emit('update:show', true);
+}
 </script>
 
 <template>
@@ -85,6 +91,18 @@ function openTodoList() {
                     aria-label="Abrir minha lista"
                 >
                     <Inbox class="h-5 w-5" />
+                </button>
+
+                <button
+                    @click="openDiary"
+                    :class="[
+                        'flex h-11 w-11 items-center justify-center rounded-l-2xl border border-r-0 shadow transition-all duration-300',
+                        'border-transparent text-white', theme.iconBg
+                    ]"
+                    title="Diário"
+                    aria-label="Abrir diário"
+                >
+                    <BookText class="h-5 w-5" />
                 </button>
             </template>
             <template v-else>
@@ -133,6 +151,18 @@ function openTodoList() {
                     >
                         <Inbox class="h-4 w-4" />
                     </button>
+
+                    <button
+                        @click="openDiary"
+                        :class="[
+                            'rounded-md p-2 transition-colors duration-500',
+                            activeTab === 'diary' ? theme.panelIconBg : 'bg-white',
+                            activeTab === 'diary' ? theme.panelIconText : 'text-gray-400'
+                        ]"
+                        title="Diário"
+                    >
+                        <BookText class="h-4 w-4" />
+                    </button>
                 </div>
 
                 <!-- Panel body -->
@@ -170,6 +200,10 @@ function openTodoList() {
                     </div>
 
                     <!-- Todo list tab -->
+                    <div v-else-if="activeTab === 'diary'">
+                        <DiaryTab :selected-date="selectedDate" />
+                    </div>
+
                     <div v-else>
                         <AssignedTasksList
                             :tasks="assignedTasks"
