@@ -10,11 +10,30 @@ const props = defineProps({
     selectedDate: { type: String, default: '' },
 });
 
+const emit = defineEmits(['diary-saved']);
+
 const loading = ref(false);
 const saveStatus = ref('saved'); // 'saved' | 'saving' | 'error'
 const isHydrating = ref(false);
+const isDeletedEntry = ref(false);
+const hasEntry = ref(false);
+const entryId = ref(null);
+const deletedByName = ref('');
 let saveTimeout = null;
 let latestLoadId = 0;
+
+function isDateInPast(date) {
+    if (!date) return false;
+    const today = new Date();
+    const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const selected = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(selected.getTime())) return false;
+    return selected < localToday;
+}
+
+const isPastDate = computed(() => {
+    return isDateInPast(props.selectedDate);
+});
 
 const editor = useEditor({
     extensions: [
@@ -54,15 +73,27 @@ async function loadDiary(date) {
     loading.value = true;
 
     try {
-        const resp = await axios.get(route('agenda.diary.show'), { params: { date } });
+        const resp = await axios.get(route('agenda.diary.show'), {
+            params: { date, include_deleted_content: true },
+        });
         if (loadId !== latestLoadId) return;
 
+        isDeletedEntry.value = Boolean(resp.data?.entry?.deleted);
+        entryId.value = resp.data?.entry?.id ?? null;
+        hasEntry.value = entryId.value != null;
+        deletedByName.value = resp.data?.entry?.deleted_by_name || '';
+        const content = resp.data?.entry?.content || '';
+
         isHydrating.value = true;
-        editor.value.commands.setContent(resp.data?.entry?.content || '', false);
+        editor.value.commands.setContent(content, false);
         isHydrating.value = false;
         saveStatus.value = 'saved';
     } catch (error) {
         if (loadId !== latestLoadId) return;
+        isDeletedEntry.value = false;
+        hasEntry.value = false;
+        entryId.value = null;
+        deletedByName.value = '';
         isHydrating.value = true;
         editor.value.commands.setContent('', false);
         isHydrating.value = false;
@@ -75,7 +106,7 @@ async function loadDiary(date) {
 }
 
 async function saveDiary(date) {
-    if (!date || !editor.value) return;
+    if (!date || !editor.value || isDateInPast(date)) return;
     const content = editor.value.getHTML();
     saveStatus.value = 'saving';
 
@@ -83,6 +114,7 @@ async function saveDiary(date) {
         await axios.put(route('agenda.diary.upsert'), { date, content });
         if (props.selectedDate === date) {
             saveStatus.value = 'saved';
+            emit('diary-saved', { date, content });
         }
     } catch (error) {
         if (props.selectedDate === date) {
@@ -92,7 +124,7 @@ async function saveDiary(date) {
 }
 
 function queueSave() {
-    if (!props.selectedDate) return;
+    if (!props.selectedDate || isPastDate.value) return;
 
     saveStatus.value = 'saving';
 
@@ -105,7 +137,7 @@ function queueSave() {
 }
 
 async function flushPendingSave(date) {
-    if (!date) return;
+    if (!date || isDateInPast(date)) return;
     if (!saveTimeout) return;
 
     clearTimeout(saveTimeout);
@@ -127,6 +159,38 @@ watch(
     { immediate: true }
 );
 
+watch(
+    [() => isPastDate.value, () => isDeletedEntry.value, () => editor.value],
+    ([past, _deleted, editorInstance]) => {
+        if (!editorInstance) return;
+        editorInstance.setEditable(!past);
+        if (past) {
+            if (saveTimeout) {
+                clearTimeout(saveTimeout);
+                saveTimeout = null;
+            }
+            saveStatus.value = 'saved';
+        }
+    },
+    { immediate: true }
+);
+
+async function restoreEntry() {
+    if (!entryId.value) return;
+    try {
+        const backendOrigin = new URL(route('diary.index')).origin;
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        await axios.post(`${backendOrigin}/diary/entries/${entryId.value}/restore`, {}, {
+            headers: token ? { 'X-CSRF-TOKEN': token } : {},
+        });
+        isDeletedEntry.value = false;
+        deletedByName.value = '';
+        await loadDiary(props.selectedDate);
+    } catch (error) {
+        // keep state if restore fails
+    }
+}
+
 onBeforeUnmount(async () => {
     await flushPendingSave(props.selectedDate);
     editor.value?.destroy();
@@ -141,12 +205,45 @@ onBeforeUnmount(async () => {
                 <p class="text-sm font-medium capitalize text-gray-700">{{ selectedDateLabel }}</p>
             </div>
             <span v-if="loading" class="text-xs text-gray-400">Carregando...</span>
-            <span v-else-if="saveStatus === 'saving'" class="text-xs text-amber-500">Salvando...</span>
-            <span v-else-if="saveStatus === 'error'" class="text-xs text-red-500">Erro ao salvar</span>
-            <span v-else class="text-xs text-emerald-600">Salvo</span>
+            <template v-else-if="isPastDate">
+                <span v-if="isDeletedEntry" class="text-xs text-gray-500">
+                    Registro excluído{{ deletedByName ? ` por ${deletedByName}` : '' }}
+                </span>
+                <span v-else-if="hasEntry" class="text-xs text-gray-500">Somente leitura</span>
+            </template>
+            <template v-else>
+                <span v-if="saveStatus === 'saving'" class="text-xs text-amber-500">Salvando...</span>
+                <span v-else-if="saveStatus === 'error'" class="text-xs text-red-500">Erro ao salvar</span>
+                <span v-else-if="hasEntry" class="text-xs text-emerald-600">Salvo</span>
+            </template>
         </div>
 
-        <div class="rounded-md border border-input shadow-sm overflow-hidden">
+        <!-- Past + deleted: amber banner with restore -->
+        <div v-if="!loading && isDeletedEntry && isPastDate" class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <div class="flex items-center justify-between gap-3">
+                <span>Este registro foi excluído{{ deletedByName ? ` por ${deletedByName}` : '' }}.</span>
+                <button
+                    type="button"
+                    class="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-50 transition-colors"
+                    @click="restoreEntry"
+                >
+                    Restaurar
+                </button>
+            </div>
+        </div>
+
+        <!-- Past + no entry: info message -->
+        <div v-else-if="!loading && isPastDate && !hasEntry" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-4 text-center text-sm text-gray-400">
+            Nenhum registro para esta data.
+        </div>
+
+        <!-- Past + active entry: read-only content (no toolbar) -->
+        <div v-else-if="!loading && isPastDate && hasEntry && !isDeletedEntry" class="rounded-md overflow-hidden">
+            <EditorContent :editor="editor" />
+        </div>
+
+        <!-- Today/future: editable editor with toolbar -->
+        <div v-else-if="!loading && !isPastDate" class="rounded-md overflow-hidden border border-input shadow-sm">
             <div class="flex items-center gap-0.5 border-b border-gray-100 px-2 py-1.5 bg-gray-50/80">
                 <button
                     type="button"

@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router, Link } from '@inertiajs/vue3';
+import { Head, router, Link, usePage } from '@inertiajs/vue3';
 import BookCard from '@/Components/ui/BookCard.vue';
 import Input from '@/Components/ui/Input.vue';
 import { Search, LibraryBig, Star, FileText, FolderOpen, Image, Film, File, StarOff, ChevronLeft, ChevronRight } from 'lucide-vue-next';
@@ -13,6 +13,7 @@ const props = defineProps({
     favorites: { type: Array, default: () => [] },
     filters: Object,
 });
+const page = usePage();
 
 const search = ref(props.filters.search || '');
 const localFavorites = ref([...props.favorites]);
@@ -71,6 +72,41 @@ const removeFavorite = async (fav) => {
         nextTick(() => updateScrollState());
     } catch (error) {
         console.error('Erro ao desfavoritar:', error);
+    }
+};
+
+const currentUserAvatar = computed(() => page.props.auth?.user?.avatar_url || null);
+
+const getBookImage = (book) => {
+    if (book.title === 'Base de Conhecimento') return '/images/brain.png';
+    if (isDiaryBook(book)) return currentUserAvatar.value || '/images/heart.png';
+    return book.image_url || book.image || null;
+};
+
+const getBookIcon = (book) => {
+    if (isDiaryBook(book) && !currentUserAvatar.value) return null;
+    return book.icon;
+};
+
+const isDiaryBook = (book) => {
+    const normalized = (book?.title || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+
+    return normalized === 'MEU DIARIO' || book?.icon === 'Heart';
+};
+
+const getBookLink = (book) => {
+    if (!isDiaryBook(book)) {
+        return route('library.show', book.id);
+    }
+
+    try {
+        return route('diary.index');
+    } catch (error) {
+        return '/diary';
     }
 };
 
@@ -192,14 +228,13 @@ onMounted(() => {
 
                 <div v-else
                     class="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 justify-items-center">
-                    <Link v-for="book in books" :key="book.id" :href="route('library.show', book.id)">
+                    <Link v-for="book in books" :key="book.id" :href="getBookLink(book)">
                         <BookCard
                             :color="book.color"
                             :text-color="book.text_color"
-                            :icon="book.icon"
-                            :image="book.title === 'Base de Conhecimento'
-                                ? '/images/brain.png'
-                                : (book.image_url || book.image)"
+                            :icon="getBookIcon(book)"
+                            :image="getBookImage(book)"
+                            :avatar="isDiaryBook(book)"
                         >
                             {{ book.title }}
                         </BookCard>

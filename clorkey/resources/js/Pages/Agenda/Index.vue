@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import { X } from 'lucide-vue-next';
+import { ChevronLeft, ChevronRight, X } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { useAgendaClock } from '@/composables/useAgendaClock';
 import { useAgendaCalendar } from '@/composables/useAgendaCalendar';
@@ -33,7 +33,8 @@ const {
 const {
     calendarDate, monthLabel, weekdayString, weekDayLabels, calendarWeeks,
     prevMonth, nextMonth, selectCalendarDay, selectToday,
-    formatDateToYMD, formatDateLabel,
+    prevDay, nextDay,
+    formatDateToYMD,
 } = useAgendaCalendar(agendaStore);
 
 const { showToast, toastMessage, triggerToast } = useToast();
@@ -90,9 +91,31 @@ const panelContext = ref('default');
 
 // ─── Current date label for the header ───────────────────────────────────────
 
-const headerDateLabel = computed(() =>
-    formatDateLabel(formatDateToYMD(calendarDate.value))
-);
+const headerDateLabel = computed(() => {
+    const dateStr = formatDateToYMD(calendarDate.value);
+    if (!dateStr) return '';
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length !== 3) return dateStr;
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return dateStr;
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    }).format(new Date(year, month - 1, day));
+});
+
+const isTodaySelected = computed(() => {
+    const selected = calendarDate.value instanceof Date
+        ? calendarDate.value
+        : new Date(calendarDate.value);
+    if (Number.isNaN(selected.getTime())) return true;
+
+    const today = new Date();
+    const selectedKey = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate()).getTime();
+    const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    return selectedKey === todayKey;
+});
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
@@ -197,15 +220,47 @@ async function handleAssignedTaskDropped(payload) {
     <AuthenticatedLayout>
         <!-- Header: period icon + weekday + clock -->
         <template #header>
-            <div class="flex items-center justify-between w-full">
-                <div class="flex items-center gap-3">
+            <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center">
+                <div class="flex items-center">
                     <div :class="['flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-500', theme.iconBg]">
                         <component :is="periodIcon" :class="['h-4.5 w-4.5 transition-colors duration-500', theme.iconText]" />
                     </div>
-                    <div>
-                        <h1 class="text-lg font-semibold capitalize text-gray-900">{{ weekdayString }}</h1>
-                        <p class="text-sm text-gray-500">{{ headerDateLabel }}</p>
+                </div>
+
+                <div class="flex flex-col items-center">
+                    <h1 class="text-center text-lg font-semibold capitalize text-gray-900">{{ weekdayString }}</h1>
+                    <div class="flex items-center gap-1 text-sm text-gray-500">
+                        <button
+                            type="button"
+                            class="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                            title="Dia anterior"
+                            aria-label="Dia anterior"
+                            @click="prevDay"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                        </button>
+                        <p>{{ headerDateLabel }}</p>
+                        <button
+                            type="button"
+                            class="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                            title="Próximo dia"
+                            aria-label="Próximo dia"
+                            @click="nextDay"
+                        >
+                            <ChevronRight class="h-4 w-4" />
+                        </button>
                     </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button
+                        v-if="!isTodaySelected"
+                        type="button"
+                        class="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                        @click="selectToday"
+                    >
+                        Hoje
+                    </button>
                 </div>
             </div>
         </template>
@@ -281,6 +336,7 @@ async function handleAssignedTaskDropped(payload) {
         <TaskCreatePanel
             :show="showTaskPanel"
             :users="users"
+            :current-user-id="page.props.auth.user?.id"
             :initial-hour="selectedHour"
             :initial-date="formatDateToYMD(calendarDate)"
             :task="panelTask"

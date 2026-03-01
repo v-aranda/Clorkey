@@ -116,6 +116,18 @@ export function useAgendaCalendar(agendaStore) {
         selectCalendarDay(today);
     }
 
+    function prevDay() {
+        const base = new Date(calendarDate.value);
+        base.setDate(base.getDate() - 1);
+        selectCalendarDay(base);
+    }
+
+    function nextDay() {
+        const base = new Date(calendarDate.value);
+        base.setDate(base.getDate() + 1);
+        selectCalendarDay(base);
+    }
+
     // ─── Helpers for template ─────────────────────────────────────────────────
 
     function isToday(date) {
@@ -186,6 +198,8 @@ export function useAgendaCalendar(agendaStore) {
         calendarWeeks,
         prevMonth,
         nextMonth,
+        prevDay,
+        nextDay,
         selectCalendarDay,
         selectToday,
         isToday,

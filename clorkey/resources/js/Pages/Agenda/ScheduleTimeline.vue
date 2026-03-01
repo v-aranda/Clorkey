@@ -297,4 +297,10 @@ function onSlotDrop(event, hour) {
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+.diary-prose :deep(p) { margin: 0.2rem 0; }
+.diary-prose :deep(ul),
+.diary-prose :deep(ol) { padding-left: 1.25rem; margin: 0.2rem 0; }
+.diary-prose :deep(li) { margin: 0.1rem 0; }
+.diary-prose :deep(strong) { font-weight: 600; }
 </style>

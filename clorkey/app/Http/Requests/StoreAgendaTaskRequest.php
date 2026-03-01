@@ -22,7 +22,7 @@ class StoreAgendaTaskRequest extends FormRequest
             'date'                            => $requiresDateTime ? ['required', 'date'] : ['nullable', 'date'],
             'start_time'                      => $requiresDateTime ? ['required', 'date_format:H:i'] : ['nullable', 'date_format:H:i'],
             'end_time'                        => ['nullable', 'date_format:H:i', 'after:start_time'],
-            'participants'                    => ['nullable', 'array'],
+            'participants'                    => ['required', 'array', 'min:1'],
             'participants.*'                  => ['integer', 'exists:users,id'],
             'context'                         => ['nullable', 'string'],
             // Recorrência
@@ -43,6 +43,9 @@ class StoreAgendaTaskRequest extends FormRequest
             'start_time.required'                 => 'O horário de início é obrigatório.',
             'start_time.date_format'              => 'O horário deve estar no formato HH:MM.',
             'end_time.after'                      => 'O horário de término deve ser após o início.',
+            'participants.required'               => 'Selecione ao menos um participante.',
+            'participants.array'                  => 'O campo participantes está inválido.',
+            'participants.min'                    => 'Selecione ao menos um participante.',
             'recurrence.type.required_with'       => 'Selecione o tipo de recorrência.',
             'recurrence.interval.required_if'     => 'Informe o intervalo de recorrência.',
             'recurrence.interval.min'             => 'O intervalo mínimo é 1.',

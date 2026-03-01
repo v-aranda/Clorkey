@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router } from '@inertiajs/vue3';
-import { Folder, Upload, ChevronRight, Trash2, Download, Plus, FolderPlus, Search, X, Pencil, Info as InfoIcon, FolderOpen, FileText, File, Move, Star, StarOff } from 'lucide-vue-next';
+import { Folder, Upload, ChevronRight, Trash2, Download, Plus, FolderPlus, Search, X, Pencil, Info as InfoIcon, FolderOpen, FileText, File, Move, Star, StarOff, ArrowLeft, Brain, Heart, Database, Code, Server, Globe } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Button from '@/Components/ui/Button.vue';
 import FolderItem from '@/Components/ui/FolderItem.vue';
@@ -22,6 +22,11 @@ const props = defineProps({
     documents: Array,
     breadcrumbs: Array,
     favoriteIds: { type: Array, default: () => [] },
+});
+
+const bookIconComponent = computed(() => {
+    const iconMap = { Brain, FileText, Database, Code, Server, Globe, Heart };
+    return (props.book?.icon && iconMap[props.book.icon]) || FileText;
 });
 
 // =============================================
@@ -820,39 +825,42 @@ const renameDocument = (doc, newName) => {
 <template>
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between w-full">
-                <!-- Breadcrumb -->
-                <nav class="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
-                    <Link :href="route('library.index')"
-                        class="hover:text-gray-900 transition-colors whitespace-nowrap">
-                        Biblioteca
+            <div class="flex items-center justify-between w-full">
+                <!-- Back + Title + Breadcrumb -->
+                <div class="flex items-center gap-2 min-w-0">
+                    <Link :href="route('library.index')" class="group relative flex items-center justify-center h-8 w-8 rounded-full hover:bg-gray-100 transition-colors shrink-0" title="Voltar">
+                        <ArrowLeft class="h-5 w-5 text-gray-500 group-hover:text-gray-700 transition-colors" />
+                        <span class="absolute left-full ml-1 whitespace-nowrap text-xs text-gray-600 bg-white border rounded px-2 py-1 shadow-sm opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">Voltar</span>
                     </Link>
-                    <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
-                    <Link :href="route('library.show', book.id)" @dragover="onDragOverBreadcrumb($event, 'root')"
-                        @dragleave="onDragLeaveBreadcrumb($event, 'root')" @drop="onDropMove($event, null, book.id)"
-                        class="px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap" :class="[
-                            !currentFolder && !breadcrumbs?.length ? 'font-semibold text-gray-800' : '',
-                            isDraggingOverBreadcrumb === 'root' ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''
-                        ]">
-                        {{ book.title }}
-                    </Link>
-                    <template v-if="breadcrumbs?.length" v-for="crumb in breadcrumbs" :key="crumb.id">
-                        <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
-                        <Link :href="route('library.folder.show', [book.id, crumb.id])"
-                            @dragover="onDragOverBreadcrumb($event, crumb.id)"
-                            @dragleave="onDragLeaveBreadcrumb($event, crumb.id)"
-                            @drop="onDropMove($event, crumb.id, book.id)"
-                            class="px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap truncate max-w-[120px]"
-                            :class="isDraggingOverBreadcrumb === crumb.id ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''">
-                            {{ crumb.name }}
+
+                    <nav class="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                        <Link :href="route('library.show', book.id)" @dragover="onDragOverBreadcrumb($event, 'root')"
+                            @dragleave="onDragLeaveBreadcrumb($event, 'root')" @drop="onDropMove($event, null, book.id)"
+                            class="flex items-center gap-2 px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap" :class="[
+                                !currentFolder && !breadcrumbs?.length ? 'font-semibold text-gray-800' : '',
+                                isDraggingOverBreadcrumb === 'root' ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''
+                            ]">
+                            <component :is="bookIconComponent" class="h-5 w-5 text-gray-600 shrink-0" />
+                            <span class="text-lg font-semibold text-gray-900">{{ book.title }}</span>
                         </Link>
-                    </template>
-                    <template v-if="currentFolder">
-                        <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
-                        <span class="font-semibold text-gray-800 whitespace-nowrap truncate max-w-[180px]">{{
-                            currentFolder.name }}</span>
-                    </template>
-                </nav>
+                        <template v-if="breadcrumbs?.length" v-for="crumb in breadcrumbs.filter(c => c.id !== currentFolder?.id)" :key="crumb.id">
+                            <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
+                            <Link :href="route('library.folder.show', [book.id, crumb.id])"
+                                @dragover="onDragOverBreadcrumb($event, crumb.id)"
+                                @dragleave="onDragLeaveBreadcrumb($event, crumb.id)"
+                                @drop="onDropMove($event, crumb.id, book.id)"
+                                class="px-1.5 py-0.5 rounded hover:text-gray-900 transition-colors whitespace-nowrap truncate max-w-[120px]"
+                                :class="isDraggingOverBreadcrumb === crumb.id ? 'bg-primary/10 text-primary ring-1 ring-primary border-primary border-dashed' : ''">
+                                {{ crumb.name }}
+                            </Link>
+                        </template>
+                        <template v-if="currentFolder">
+                            <ChevronRight class="w-4 h-4 shrink-0 text-gray-400" />
+                            <span class="font-semibold text-gray-800 whitespace-nowrap truncate max-w-[180px]">{{
+                                currentFolder.name }}</span>
+                        </template>
+                    </nav>
+                </div>
 
                 <!-- Right side: Search + Selection Actions -->
                 <div class="flex items-center gap-3">

@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Brain, FileText, Database, Code, Server, Globe } from 'lucide-vue-next';
+import { Brain, FileText, Database, Code, Server, Globe, Heart } from 'lucide-vue-next';
 
 const props = defineProps({
     color: {
@@ -19,11 +19,15 @@ const props = defineProps({
         type: String,
         default: null,
     },
+    avatar: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const iconComponent = computed(() => {
     if (!props.icon) return null;
-    const icons = { Brain, FileText, Database, Code, Server, Globe };
+    const icons = { Brain, FileText, Database, Code, Server, Globe, Heart };
     return typeof props.icon === 'string' ? icons[props.icon] || FileText : props.icon;
 });
 </script>
@@ -38,9 +42,9 @@ const iconComponent = computed(() => {
 
                 <!-- Content -->
                 <div class="content">
-                    <div class="icon-wrapper">
+                    <div :class="avatar ? 'avatar-wrapper' : 'icon-wrapper'">
                         <img v-if="image" :src="image" alt="Book Cover"
-                            class="h-full w-full object-contain drop-shadow-md" />
+                            :class="avatar ? 'h-full w-full object-cover rounded-full' : 'h-full w-full object-contain drop-shadow-md'" />
                         <component v-else-if="iconComponent" :is="iconComponent" class="h-12 w-12 drop-shadow-md" />
                     </div>
 
@@ -160,6 +164,19 @@ const iconComponent = computed(() => {
 .icon-wrapper {
     height: 4rem;
     width: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-wrapper {
+    height: 5rem;
+    width: 5rem;
+    border-radius: 9999px;
+    background-color: #d5cfc4;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;

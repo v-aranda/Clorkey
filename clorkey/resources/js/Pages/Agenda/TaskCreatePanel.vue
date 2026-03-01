@@ -9,6 +9,7 @@ import { useTiptapEditor } from '@/composables/useTiptapEditor';
 const props = defineProps({
     show: { type: Boolean, default: false },
     users: { type: Array, default: () => [] },
+    currentUserId: { type: [Number, String], default: null },
     initialHour: { type: Number, default: null },
     initialDate: { type: String, default: '' },
     task: { type: Object, default: null },
@@ -120,6 +121,10 @@ function resetFormForCreate() {
         : '';
     taskForm.end_time = null;
     taskForm.participants = [];
+    const currentUserId = Number(props.currentUserId);
+    if (!Number.isNaN(currentUserId) && currentUserId > 0) {
+        taskForm.participants = [currentUserId];
+    }
     taskForm.recurrence = null;
     taskForm.context = props.context || 'default';
     recurrenceEnabled.value = false;
@@ -460,6 +465,9 @@ function submitTask() {
                                 :users="users"
                                 v-model="taskForm.participants"
                             />
+                            <p v-if="taskForm.errors.participants" class="text-sm text-red-500 mt-1">
+                                {{ taskForm.errors.participants }}
+                            </p>
                         </div>
 
                         <!-- Submit -->

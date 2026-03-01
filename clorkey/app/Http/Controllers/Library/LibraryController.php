@@ -16,6 +16,10 @@ class LibraryController extends Controller
 {
     public function show(Request $request, LibraryBook $book, $folderId = null)
     {
+        if (mb_strtoupper((string) $book->icon) === 'HEART') {
+            return redirect()->route('diary.index');
+        }
+
         $currentFolder = null;
         $breadcrumbs = [];
 

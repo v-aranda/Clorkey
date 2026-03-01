@@ -79,6 +79,7 @@ class AgendaTaskController extends Controller
         $recurrence = $data['recurrence'] ?? null;
 
         $participants = collect($data['participants'] ?? [])
+            ->push((int) auth()->id())
             ->map(fn($id) => (int) $id)
             ->filter(fn($id) => $id > 0)
             ->unique()

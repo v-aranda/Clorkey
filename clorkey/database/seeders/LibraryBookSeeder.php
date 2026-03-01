@@ -22,5 +22,24 @@ class LibraryBookSeeder extends Seeder
                 'image' => '/images/brain.png', // already present in public/images
             ],
         );
+
+        \App\Models\LibraryBook::query()
+            ->where('icon', 'Heart')
+            ->update([
+                'title' => 'Meu Diário',
+                'color' => 'bg-red-600',
+                'text_color' => 'text-white',
+                'image' => '/images/heart.png',
+            ]);
+
+        \App\Models\LibraryBook::updateOrCreate(
+            ['icon' => 'Heart'],
+            [
+                'title' => 'Meu Diário',
+                'color' => 'bg-red-600',
+                'text_color' => 'text-white',
+                'image' => '/images/heart.png',
+            ],
+        );
     }
 }

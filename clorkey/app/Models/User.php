@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -36,7 +35,9 @@ class User extends Authenticatable
             return null;
         }
 
-        return Storage::disk('s3')->url($this->avatar_path);
+        $version = md5($this->avatar_path.'|'.($this->updated_at?->getTimestamp() ?? 0));
+
+        return route('users.avatar', ['user' => $this->id, 'v' => $version]);
     }
 
     public function isAdmin(): bool

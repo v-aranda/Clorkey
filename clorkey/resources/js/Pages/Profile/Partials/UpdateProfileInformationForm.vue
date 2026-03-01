@@ -5,7 +5,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import UserAvatar from '@/Components/UserAvatar.vue';
-import { Link, useForm, usePage, router } from '@inertiajs/vue3';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { Camera, Trash2 } from 'lucide-vue-next';
 
 defineProps({
@@ -17,25 +17,26 @@ defineProps({
     },
 });
 
-const user = usePage().props.auth.user;
+const page = usePage();
+const user = computed(() => page.props.auth?.user || {});
 const fileInput = ref(null);
 const avatarPreview = ref(null);
 
 const form = useForm({
-    name: user.name,
-    email: user.email,
+    name: user.value.name || '',
+    email: user.value.email || '',
     avatar: null,
     remove_avatar: false,
 });
 
 const previewUser = computed(() => {
     if (avatarPreview.value) {
-        return { ...user, avatar_url: avatarPreview.value }
+        return { ...user.value, avatar_url: avatarPreview.value }
     }
     if (form.remove_avatar) {
-        return { ...user, avatar_url: null }
+        return { ...user.value, avatar_url: null }
     }
-    return user
+    return user.value
 });
 
 function selectAvatar() {
@@ -64,23 +65,29 @@ function removeAvatar() {
 }
 
 function submit() {
-    router.post(route('profile.update'), {
-        _method: 'post',
-        name: form.name,
-        email: form.email,
-        avatar: form.avatar,
-        remove_avatar: form.remove_avatar ? 1 : 0,
-    }, {
+    form.transform((data) => ({
+        ...data,
+        remove_avatar: data.remove_avatar ? 1 : 0,
+    })).post(route('profile.update'), {
         forceFormData: true,
         preserveScroll: true,
-        onSuccess: () => {
+        onSuccess: (respPage) => {
             form.avatar = null;
             avatarPreview.value = null;
             form.remove_avatar = false;
             if (fileInput.value) fileInput.value.value = '';
-        },
-        onError: (errors) => {
-            form.errors = errors;
+
+            const authUser = respPage?.props?.auth?.user;
+            if (authUser) {
+                form.defaults({
+                    name: authUser.name || '',
+                    email: authUser.email || '',
+                    avatar: null,
+                    remove_avatar: false,
+                });
+                form.name = authUser.name || '';
+                form.email = authUser.email || '';
+            }
         },
     });
 }

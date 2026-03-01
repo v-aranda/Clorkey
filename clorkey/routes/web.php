@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AgendaDiaryController;
 use App\Http\Controllers\AgendaTaskController;
 use App\Http\Controllers\AgendaReminderController;
+use App\Http\Controllers\DiaryController;
+use App\Http\Controllers\UserAvatarController;
 use App\Http\Controllers\TaskMessageController;
 use App\Http\Controllers\TaskValidationController;
 use App\Http\Controllers\ProfileController;
@@ -91,6 +93,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    Route::get('/diary', [DiaryController::class, 'index'])->name('diary.index');
+    Route::get('/diary/entries/{entry}', [DiaryController::class, 'show'])->name('diary.entries.show');
+    Route::post('/diary/entries/{entry}/restore', [DiaryController::class, 'restore'])->name('diary.entries.restore');
+    Route::delete('/diary/entries/{entry}', [DiaryController::class, 'destroy'])->name('diary.entries.destroy');
+
+    Route::get('/users/{user}/avatar', [UserAvatarController::class, 'show'])->name('users.avatar');
+    Route::get('/library/diary', fn () => redirect()->route('diary.index'))->name('library.diary.redirect');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

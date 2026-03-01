@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,27 +26,39 @@ class ProfileController extends Controller
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $user = $request->user();
+        $data = $request->validated();
 
-        $user->fill($request->safe()->only(['name', 'email']));
+        $user->fill([
+            'name' => $data['name'],
+            'email' => $data['email'],
+        ]);
 
         if ($user->isDirty('email')) {
             $user->email_verified_at = null;
         }
 
-        if ($request->boolean('remove_avatar') && $user->avatar_path) {
-            Storage::disk('s3')->delete($user->avatar_path);
-            $user->avatar_path = null;
-        } elseif ($request->hasFile('avatar')) {
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
+            $newPath = 'avatars/' . $user->id . '_' . Str::uuid()->toString() . '.' . $ext;
+
+            $stored = Storage::disk('s3')->putFileAs('avatars', $file, basename($newPath));
+            if (!$stored) {
+                return back()->withErrors([
+                    'avatar' => 'Não foi possível enviar a foto de perfil. Tente novamente.',
+                ]);
+            }
+
             if ($user->avatar_path) {
                 Storage::disk('s3')->delete($user->avatar_path);
             }
-            $ext = $request->file('avatar')->getClientOriginalExtension();
-            $path = $request->file('avatar')->storeAs(
-                'avatars',
-                $user->id . '_' . time() . '.' . $ext,
-                's3'
-            );
-            $user->avatar_path = $path;
+
+            $user->avatar_path = $stored;
+        } elseif ($request->boolean('remove_avatar')) {
+            if ($user->avatar_path) {
+                Storage::disk('s3')->delete($user->avatar_path);
+            }
+            $user->avatar_path = null;
         }
 
         $user->save();
