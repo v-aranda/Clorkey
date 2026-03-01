@@ -185,18 +185,7 @@ services:
     networks:
       - clorkey-network
 
-  # Mailpit — captura emails em desenvolvimento (apenas perfil dev)
-  mailpit:
-    profiles: [dev]
-    image: axllent/mailpit:v1.22
-    container_name: clorkey-mailpit
-    restart: unless-stopped
-    ports:
-      - "${FORWARD_MAILPIT_PORT:-8025}:8025"
-      - "${FORWARD_MAILPIT_SMTP_PORT:-1025}:1025"
-    networks:
-      - clorkey-network
-
+ 
 # =============================================================================
 # VOLUMES
 # =============================================================================
