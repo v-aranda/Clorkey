@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutDashboard, Users, Library, CalendarDays, ChevronDown, LogOut, User } from 'lucide-vue-next';
+import { LayoutDashboard, Users, Library, CalendarDays, Columns3, ChevronDown, LogOut, User } from 'lucide-vue-next';
 import UserAvatar from '@/Components/UserAvatar.vue';
 
 const page = usePage();
@@ -35,6 +35,17 @@ const sidebarCollapsed = ref(false);
                 ]">
                     <CalendarDays class="h-5 w-5" />
                     Agenda
+                </Link>
+
+                <!-- Quadro -->
+                <Link :href="route('quadro.index')" :class="[
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    route().current('quadro.*')
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                ]">
+                    <Columns3 class="h-5 w-5" />
+                    Quadros
                 </Link>
 
                 <!-- Biblioteca -->

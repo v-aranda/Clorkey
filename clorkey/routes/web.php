@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AgendaDiaryController;
 use App\Http\Controllers\AgendaTaskController;
+use App\Http\Controllers\QuadroController;
 use App\Http\Controllers\AgendaReminderController;
 use App\Http\Controllers\DiaryController;
 use App\Http\Controllers\UserAvatarController;
@@ -42,13 +43,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Task Chat: Messages & Validations ─────────────────────────────────────
     Route::prefix('agenda/tasks/{task}')->group(function () {
-        Route::get('messages',                              [TaskMessageController::class,    'index'])  ->name('agenda.tasks.messages.index');
-        Route::post('messages',                             [TaskMessageController::class,    'store'])  ->name('agenda.tasks.messages.store');
-        Route::get('validations',                           [TaskValidationController::class, 'index'])  ->name('agenda.tasks.validations.index');
-        Route::post('validations',                          [TaskValidationController::class, 'store'])  ->name('agenda.tasks.validations.store');
-        Route::post('validations/{validation}/approve',     [TaskValidationController::class, 'approve'])->name('agenda.tasks.validations.approve');
-        Route::post('validations/{validation}/reject',      [TaskValidationController::class, 'reject']) ->name('agenda.tasks.validations.reject');
+        Route::get('messages', [TaskMessageController::class, 'index'])->name('agenda.tasks.messages.index');
+        Route::post('messages', [TaskMessageController::class, 'store'])->name('agenda.tasks.messages.store');
+        Route::get('validations', [TaskValidationController::class, 'index'])->name('agenda.tasks.validations.index');
+        Route::post('validations', [TaskValidationController::class, 'store'])->name('agenda.tasks.validations.store');
+        Route::post('validations/{validation}/approve', [TaskValidationController::class, 'approve'])->name('agenda.tasks.validations.approve');
+        Route::post('validations/{validation}/reject', [TaskValidationController::class, 'reject'])->name('agenda.tasks.validations.reject');
     });
+
+    // ── Quadro ───────────────────────────────────────────────────────────────
+    Route::get('/quadro', [QuadroController::class, 'index'])->name('quadro.index');
+    Route::get('/quadro/tasks', [QuadroController::class, 'tasks'])->name('quadro.tasks');
+    Route::post('/quadro/reorder', [QuadroController::class, 'reorder'])->name('quadro.reorder');
 
     Route::get('/library', [\App\Http\Controllers\LibraryController::class, 'index'])->name('library.index');
 
@@ -99,7 +105,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/diary/entries/{entry}', [DiaryController::class, 'destroy'])->name('diary.entries.destroy');
 
     Route::get('/users/{user}/avatar', [UserAvatarController::class, 'show'])->name('users.avatar');
-    Route::get('/library/diary', fn () => redirect()->route('diary.index'))->name('library.diary.redirect');
+    Route::get('/library/diary', fn() => redirect()->route('diary.index'))->name('library.diary.redirect');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update');

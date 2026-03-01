@@ -11,12 +11,19 @@ class AgendaTask extends Model
 {
     use SoftDeletes;
 
+    const STATUS_TODO = 'todo';
+    const STATUS_DOING = 'doing';
+    const STATUS_STOPPED = 'stopped';
+    const STATUS_DONE = 'done';
+    const STATUSES = [self::STATUS_TODO, self::STATUS_DOING, self::STATUS_STOPPED, self::STATUS_DONE];
+
     protected $guarded = [];
 
     protected $casts = [
-        'participants'      => 'array',
-        'date'              => 'date',
+        'participants' => 'array',
+        'date' => 'date',
         'recurrence_config' => 'array',
+        'sort_order' => 'integer',
     ];
 
     public function user(): BelongsTo
