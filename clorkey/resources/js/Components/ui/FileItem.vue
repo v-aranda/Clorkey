@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, nextTick } from 'vue';
 import { FileText, Image, File, FileSpreadsheet, FileArchive, FileCode, Film, Square, CheckSquare, Info, Star } from 'lucide-vue-next';
+import { isImageFile, isPdfFile, isVideoFile } from '@/lib/fileType';
 
 const props = defineProps({
     file: Object,
@@ -46,9 +47,9 @@ const cancelEdit = () => {
 
 defineExpose({ startEditing });
 
-const isImage = computed(() => props.file.mime_type?.startsWith('image/'));
-const isPdf = computed(() => props.file.mime_type === 'application/pdf');
-const isVideo = computed(() => props.file.mime_type?.startsWith('video/'));
+const isImage = computed(() => isImageFile(props.file));
+const isPdf = computed(() => isPdfFile(props.file));
+const isVideo = computed(() => isVideoFile(props.file));
 const isViewable = computed(() => isImage.value || isPdf.value || isVideo.value);
 
 const hasVisualPreview = computed(() => {
@@ -70,7 +71,7 @@ const fileSize = computed(() => {
 
 const fileIcon = computed(() => {
     const mime = props.file.mime_type || '';
-    if (mime === 'application/pdf') return { icon: FileText, color: 'text-red-500' };
+    if (isPdf.value) return { icon: FileText, color: 'text-red-500' };
     if (mime.startsWith('image/')) return { icon: Image, color: 'text-blue-500' };
     if (mime.startsWith('video/')) return { icon: Film, color: 'text-purple-500' };
     if (mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv'))

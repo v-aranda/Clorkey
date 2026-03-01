@@ -7,6 +7,7 @@ import { Search, LibraryBig, Star, FileText, FolderOpen, Image, Film, File, Star
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import HeaderTitle from '@/Components/ui/HeaderTitle.vue';
 import axios from 'axios';
+import { isImageFile, isPdfFile, isVideoFile } from '@/lib/fileType';
 
 const props = defineProps({
     books: Array,
@@ -39,19 +40,17 @@ watch(
 
 const getTypeIcon = (fav) => {
     if (fav.type === 'folder') return FolderOpen;
-    const mime = fav.mime_type || '';
-    if (mime === 'application/pdf') return FileText;
-    if (mime.startsWith('image/')) return Image;
-    if (mime.startsWith('video/')) return Film;
+    if (isPdfFile(fav)) return FileText;
+    if (isImageFile(fav)) return Image;
+    if (isVideoFile(fav)) return Film;
     return File;
 };
 
 const getTypeColor = (fav) => {
     if (fav.type === 'folder') return 'text-amber-500';
-    const mime = fav.mime_type || '';
-    if (mime === 'application/pdf') return 'text-red-500';
-    if (mime.startsWith('image/')) return 'text-blue-500';
-    if (mime.startsWith('video/')) return 'text-purple-500';
+    if (isPdfFile(fav)) return 'text-red-500';
+    if (isImageFile(fav)) return 'text-blue-500';
+    if (isVideoFile(fav)) return 'text-purple-500';
     return 'text-gray-400';
 };
 
@@ -183,14 +182,14 @@ onMounted(() => {
                                     <div class="w-10 h-10 rounded-lg overflow-hidden shrink-0 flex items-center justify-center"
                                         :class="fav.type === 'folder' ? 'bg-amber-50' : 'bg-gray-100'">
                                         <!-- Image preview -->
-                                        <img v-if="fav.type === 'file' && fav.mime_type?.startsWith('image/') && fav.file_url"
+                                        <img v-if="fav.type === 'file' && isImageFile(fav) && fav.file_url"
                                             :src="fav.file_url" class="w-full h-full object-cover" alt="" />
                                         <!-- PDF preview -->
-                                        <img v-else-if="fav.type === 'file' && fav.mime_type === 'application/pdf' && fav.preview_url"
+                                        <img v-else-if="fav.type === 'file' && isPdfFile(fav) && fav.preview_url"
                                             :src="fav.preview_url" class="w-full h-full object-cover" alt="" />
                                         <!-- Video preview -->
                                         <video
-                                            v-else-if="fav.type === 'file' && fav.mime_type?.startsWith('video/') && fav.file_url"
+                                            v-else-if="fav.type === 'file' && isVideoFile(fav) && fav.file_url"
                                             :src="fav.file_url + '#t=1'" preload="metadata" muted
                                             class="w-full h-full object-cover" />
                                         <!-- Fallback icon -->
@@ -234,7 +233,7 @@ onMounted(() => {
                             :text-color="book.text_color"
                             :icon="getBookIcon(book)"
                             :image="getBookImage(book)"
-                            :avatar="isDiaryBook(book)"
+                            :avatar="isDiaryBook(book) && !!currentUserAvatar"
                         >
                             {{ book.title }}
                         </BookCard>

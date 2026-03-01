@@ -13,6 +13,7 @@ import FileViewer from '@/Components/ui/FileViewer.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, nextTick, computed } from 'vue';
 import axios from 'axios';
+import { isImageFile, isPdfFile, isVideoFile } from '@/lib/fileType';
 
 const props = defineProps({
     book: Object,
@@ -363,9 +364,7 @@ const onDragEnd = () => {
 const viewerFile = ref(null);
 
 const viewableFiles = computed(() => {
-    return props.files.filter(f =>
-        f.mime_type?.startsWith('image/') || f.mime_type === 'application/pdf' || f.mime_type?.startsWith('video/')
-    );
+    return props.files.filter((f) => isImageFile(f) || isPdfFile(f) || isVideoFile(f));
 });
 
 const openViewer = (file) => {
@@ -446,8 +445,8 @@ const infoItemName = computed(() => {
 const infoPreviewSrc = computed(() => {
     if (!infoItem.value || !infoIsFile.value) return null;
     const file = infoItem.value;
-    if (file.mime_type === 'application/pdf' && file.preview_url) return file.preview_url;
-    if (file.mime_type?.startsWith('image/') && file.file_url) return file.file_url;
+    if (isPdfFile(file) && file.preview_url) return file.preview_url;
+    if (isImageFile(file) && file.file_url) return file.file_url;
     return null;
 });
 
@@ -1080,7 +1079,7 @@ const renameDocument = (doc, newName) => {
                             </template>
                             <template v-else>
                                 <div class="flex flex-col items-center gap-2">
-                                    <FileText v-if="infoItem.mime_type === 'application/pdf'"
+                                    <FileText v-if="isPdfFile(infoItem)"
                                         class="w-16 h-16 text-gray-300" />
                                     <File v-else class="w-16 h-16 text-gray-300" />
                                 </div>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\LibraryFile;
 use App\Models\LibraryFolder;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,11 +28,15 @@ class FileController extends Controller
         foreach ($request->file('files') as $file) {
             $path = $file->store("books/{$bookId}", 's3');
             $previewPath = null;
+            $mimeType = $this->normalizeMimeType($file);
 
             // Generate Preview for PDF
-            if ($file->getMimeType() === 'application/pdf') {
+            if ($mimeType === 'application/pdf') {
                 try {
-                    $pdf = new \Spatie\PdfToImage\Pdf($file->getPathname());
+                    $pdfTempPath = tempnam(sys_get_temp_dir(), 'pdf_');
+                    file_put_contents($pdfTempPath, Storage::disk('s3')->get($path));
+
+                    $pdf = new \Spatie\PdfToImage\Pdf($pdfTempPath);
                     $previewName = 'preview_' . pathinfo($file->hashName(), PATHINFO_FILENAME) . '.jpg';
                     $previewTempPath = sys_get_temp_dir() . '/' . $previewName;
 
@@ -40,14 +45,16 @@ class FileController extends Controller
 
                     // Upload to S3
                     $StoragePath = "books/{$bookId}/previews/{$previewName}";
-                    Storage::disk('s3')->put($StoragePath, file_get_contents($previewTempPath));
-                    $previewPath = $StoragePath;
+                    if (Storage::disk('s3')->put($StoragePath, file_get_contents($previewTempPath))) {
+                        $previewPath = $StoragePath;
+                    }
 
                     // Clean up temp file
+                    @unlink($pdfTempPath);
                     @unlink($previewTempPath);
                 } catch (\Exception $e) {
                     // Log error but continue
-                    Log::error("PDF Preview Generation Failed: " . $e->getMessage());
+                    Log::error("PDF Preview Generation Failed for file {$path}: " . $e->getMessage());
                 }
             }
 
@@ -55,7 +62,7 @@ class FileController extends Controller
                 'name' => $file->getClientOriginalName(),
                 'path' => $path,
                 'preview_path' => $previewPath,
-                'mime_type' => $file->getMimeType(),
+                'mime_type' => $mimeType,
                 'size' => $file->getSize(),
                 'library_book_id' => $bookId,
                 'library_folder_id' => $folderId,
@@ -240,5 +247,22 @@ class FileController extends Controller
             $child->update(['library_book_id' => $bookId]);
             $this->updateFolderBookId($child, $bookId);
         }
+    }
+
+    private function normalizeMimeType(UploadedFile $file): string
+    {
+        $detected = strtolower((string) $file->getMimeType());
+        $client = strtolower((string) $file->getClientMimeType());
+        $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension()));
+
+        if (
+            $extension === 'pdf'
+            || str_contains($detected, 'pdf')
+            || str_contains($client, 'pdf')
+        ) {
+            return 'application/pdf';
+        }
+
+        return $detected ?: ($client ?: 'application/octet-stream');
     }
 }

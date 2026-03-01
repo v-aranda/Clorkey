@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { X, Download, ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { isImageFile, isPdfFile, isVideoFile } from '@/lib/fileType';
 
 const props = defineProps({
     file: { type: Object, default: null },
@@ -9,9 +10,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'navigate']);
 
-const isImage = computed(() => props.file?.mime_type?.startsWith('image/'));
-const isPdf = computed(() => props.file?.mime_type === 'application/pdf');
-const isVideo = computed(() => props.file?.mime_type?.startsWith('video/'));
+const isImage = computed(() => isImageFile(props.file));
+const isPdf = computed(() => isPdfFile(props.file));
+const isVideo = computed(() => isVideoFile(props.file));
 
 // Image zoom & transform
 const scale = ref(1);
