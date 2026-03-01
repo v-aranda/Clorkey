@@ -10,6 +10,10 @@ const isAdmin = computed(() => user.value.role === 'admin');
 
 const showUserMenu = ref(false);
 const sidebarCollapsed = ref(false);
+
+defineProps({
+    noPadding: { type: Boolean, default: false },
+});
 </script>
 
 <template>
@@ -107,7 +111,7 @@ const sidebarCollapsed = ref(false);
             </header>
 
             <!-- Page content -->
-            <main class="flex-1 overflow-y-auto p-6">
+            <main :class="['flex-1 overflow-y-auto', noPadding ? 'custom-scrollbar' : 'p-6']">
                 <slot />
             </main>
         </div>

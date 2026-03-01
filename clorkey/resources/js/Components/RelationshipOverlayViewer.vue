@@ -257,10 +257,10 @@ onBeforeUnmount(() => {
                     <div class="h-full pr-0 lg:pr-[340px]">
                         <div class="h-full flex flex-col lg:flex-row gap-4 sm:gap-6 relationship-overlay__main">
                             <div class="flex-1 min-h-0 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-                                <div class="bg-violet-700 text-white px-4 py-3 flex items-center justify-between rounded-t-xl">
+                                <div class="bg-purple-700 text-white px-4 py-3 flex items-center justify-between rounded-t-xl">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <LinkIcon class="w-4 h-4 shrink-0 text-violet-200" />
-                                        <span class="text-xs uppercase tracking-wide text-violet-200">Documento atual</span>
+                                        <LinkIcon class="w-4 h-4 shrink-0 text-purple-200" />
+                                        <span class="text-xs uppercase tracking-wide text-purple-200">Documento atual</span>
                                     </div>
                                     <div class="flex items-center gap-3 ml-3 min-w-0">
                                         <span class="text-sm font-semibold truncate">{{ currentDocumentTitle }}</span>
@@ -274,7 +274,7 @@ onBeforeUnmount(() => {
                                     <div v-if="showResolveOnCurrent && currentEditStyle && (!editingSide || editingSide === 'current')"
                                         class="relationship-edit-actions absolute" :style="currentEditStyle">
                                         <button v-if="editingSide !== 'current'" @click.stop="openInlineEditor('current')"
-                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-violet-700 border border-violet-200 shadow-sm transition-colors"
+                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-purple-700 border border-purple-200 shadow-sm transition-colors"
                                             title="Editar parágrafo">
                                             <Pencil class="w-3.5 h-3.5" />
                                         </button>
@@ -301,10 +301,10 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div class="flex-1 min-h-0 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
-                                <div class="bg-violet-700 text-white px-4 py-3 flex items-center justify-between rounded-t-xl">
+                                <div class="bg-purple-700 text-white px-4 py-3 flex items-center justify-between rounded-t-xl">
                                     <div class="flex items-center gap-2 min-w-0">
-                                        <LinkIcon class="w-4 h-4 shrink-0 text-violet-200" />
-                                        <span class="text-xs uppercase tracking-wide text-violet-200">Relacionado</span>
+                                        <LinkIcon class="w-4 h-4 shrink-0 text-purple-200" />
+                                        <span class="text-xs uppercase tracking-wide text-purple-200">Relacionado</span>
                                     </div>
                                     <div class="flex items-center gap-2 ml-3 min-w-0">
                                         <span class="text-sm font-semibold truncate">{{ relatedDocumentTitle }}</span>
@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
                                     <div v-if="showResolveOnRelated && relatedEditStyle && (!editingSide || editingSide === 'related')"
                                         class="relationship-edit-actions absolute" :style="relatedEditStyle">
                                         <button v-if="editingSide !== 'related'" @click.stop="openInlineEditor('related')"
-                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-violet-700 border border-violet-200 shadow-sm transition-colors"
+                                            class="relationship-edit-btn inline-flex items-center justify-center rounded-md bg-white/95 hover:bg-white text-purple-700 border border-purple-200 shadow-sm transition-colors"
                                             title="Editar parágrafo">
                                             <Pencil class="w-3.5 h-3.5" />
                                         </button>
@@ -348,12 +348,12 @@ onBeforeUnmount(() => {
 
                     <aside
                         class="absolute top-0 right-0 h-full w-full max-w-[320px] bg-white border-l border-gray-200 shadow-2xl overflow-hidden relationship-overlay__sidebar">
-                        <div class="bg-violet-700 text-white px-4 py-3 flex items-center justify-between">
+                        <div class="bg-purple-700 text-white px-4 py-3 flex items-center justify-between">
                             <div class="min-w-0">
-                                <span class="text-xs uppercase tracking-wide text-violet-200">Relacionamentos</span>
+                                <span class="text-xs uppercase tracking-wide text-purple-200">Relacionamentos</span>
                                 <p class="text-sm font-semibold mt-0.5">{{ currentDocumentTitle }}</p>
                             </div>
-                            <button @click="emit('close')" class="text-violet-200 hover:text-white transition-colors"
+                            <button @click="emit('close')" class="text-purple-200 hover:text-white transition-colors"
                                 title="Fechar visualização">
                                 <X class="w-5 h-5" />
                             </button>
@@ -368,8 +368,8 @@ onBeforeUnmount(() => {
                                             ? 'border-amber-400 bg-amber-100'
                                             : 'border-amber-300 bg-amber-50 hover:border-amber-400')
                                         : (relationship?.id === rel.id
-                                            ? 'border-violet-400 bg-violet-50'
-                                            : 'border-gray-200 bg-white hover:border-violet-300')
+                                            ? 'border-purple-400 bg-purple-50'
+                                            : 'border-gray-200 bg-white hover:border-purple-300')
                                 ]">
                                 <button @click.stop="emit('removeRelationship', rel)"
                                     class="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors"
@@ -484,8 +484,8 @@ onBeforeUnmount(() => {
 }
 
 .relationship-overlay-viewer .tiptap .relationship-overlay-highlight {
-    background-color: rgba(139, 92, 246, 0.16);
-    outline: 2px solid rgba(139, 92, 246, 0.7);
+    background-color: rgba(147, 51, 234, 0.16);
+    outline: 2px solid rgba(147, 51, 234, 0.7);
     border-radius: 4px;
 }
 

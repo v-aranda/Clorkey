@@ -25,7 +25,7 @@ import DocumentRightPanel from '@/Components/DocumentRightPanel.vue';
 import RelationshipOverlayViewer from '@/Components/RelationshipOverlayViewer.vue';
 import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
-    Menu, X, GitCompare,
+    X, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
     Link2Off, ExternalLink, Download, FileText, RefreshCcw, Search
 } from 'lucide-vue-next';
@@ -449,9 +449,6 @@ const scrollToHeading = (id) => {
     setTimeout(() => window.scrollBy(0, -100), 50);
 };
 
-const toggleRightPanel = () => {
-    showRightPanel.value = !showRightPanel.value;
-};
 
 const handleTitleChange = () => {
     debouncedSave();
@@ -899,8 +896,8 @@ const navigateToRelationship = (rel) => {
     const element = document.querySelector(`[data-id="${rel.current_paragraph_id}"]`) || document.getElementById(rel.current_paragraph_id);
     if (element) {
         const originalBg = element.style.backgroundColor;
-        element.style.backgroundColor = 'rgba(139, 92, 246, 0.2)'; // violet-500 light
-        element.style.outline = '2px solid rgba(139, 92, 246, 0.8)';
+        element.style.backgroundColor = 'rgba(147, 51, 234, 0.2)'; // purple-600 light
+        element.style.outline = '2px solid rgba(147, 51, 234, 0.8)';
 
         setTimeout(() => {
             element.style.backgroundColor = originalBg;
@@ -1054,7 +1051,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :no-padding="true">
         <template #header>
             <div class="flex items-center justify-between w-full h-10">
                 <div class="flex items-center gap-4 flex-1">
@@ -1100,7 +1097,7 @@ onBeforeUnmount(() => {
             <!-- Left Toolbar Dock -->
             <EditorToolbar v-if="editor" :editor="editor" @open-link-modal="openLinkModal" />
             <!-- Editor Content -->
-            <div class="flex-1 min-w-0 overflow-y-auto bg-gray-100 relative" style="min-height: calc(100vh - 65px);">
+            <div class="flex-1 min-w-0 overflow-y-auto bg-gray-100 relative custom-scrollbar" style="min-height: calc(100vh - 65px);">
                 <div class="py-10 flex justify-center">
                     <div class="a4-page" @contextmenu="handleContextMenu" @click="handleEditorClick">
                         <editor-content :editor="editor" />
@@ -1112,7 +1109,7 @@ onBeforeUnmount(() => {
                     class="absolute inset-2 z-20 bg-gray-100 rounded-2xl overflow-hidden shadow-xl ring-1 ring-black/5 flex flex-col">
                     <!-- Control bar -->
                     <div
-                        class="sticky top-0 z-10 bg-violet-700 flex items-center gap-3 px-4 py-2 shadow-md flex-shrink-0">
+                        class="sticky top-0 z-10 bg-purple-700 flex items-center gap-3 px-4 py-2 shadow-md flex-shrink-0">
                         <button @click="closeVersionModal"
                             class="flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors">
                             <X class="w-4 h-4" /> Fechar
@@ -1122,7 +1119,7 @@ onBeforeUnmount(() => {
                             <span class="text-sm font-semibold text-white truncate">
                                 {{ versionModal.version?.label || 'Sem nome' }}
                             </span>
-                            <span class="text-xs text-violet-200">
+                            <span class="text-xs text-purple-200">
                                 {{ versionModal.version?.user?.name }}
                                 <template v-if="versionModal.version?.created_at">
                                     · {{ formatVersionDate(versionModal.version.created_at) }}
@@ -1183,7 +1180,7 @@ onBeforeUnmount(() => {
                     <div
                         class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden min-h-0">
                         <div
-                            :class="[props.document.book?.color || 'bg-violet-700', props.document.book?.text_color || 'text-white', 'px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
+                            :class="[props.document.book?.color || 'bg-purple-700', props.document.book?.text_color || 'text-white', 'px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
                             <span v-if="selectedParagraphCurrent"
                                 class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">1
                                 Selecionado</span>
@@ -1207,7 +1204,7 @@ onBeforeUnmount(() => {
                     <div
                         class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden min-h-0 relative">
                         <div
-                            :class="[selectedRelationshipDocument?.library_book_id === props.document.library_book_id ? (props.document.book?.color || 'bg-violet-700') : 'bg-gray-700', 'text-white px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
+                            :class="[selectedRelationshipDocument?.library_book_id === props.document.library_book_id ? (props.document.book?.color || 'bg-purple-700') : 'bg-gray-700', 'text-white px-4 py-3 font-medium flex items-center min-w-0 shrink-0']">
                             <span v-if="selectedParagraphRelated.length > 0"
                                 class="text-xs font-semibold bg-white/30 px-2 py-0.5 rounded mr-3 shrink-0">
                                 {{ selectedParagraphRelated.length }} Selecionado{{ selectedParagraphRelated.length > 1 ? 's' : '' }}
@@ -1246,7 +1243,7 @@ onBeforeUnmount(() => {
                 <div v-if="selectedParagraphCurrent && selectedParagraphRelated.length > 0"
                     class="absolute bottom-6 right-6 z-[110] animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <button @click="submitRelationship"
-                        class="bg-violet-600 hover:bg-violet-700 text-white shadow-xl shadow-violet-500/30 font-semibold py-3 px-6 rounded-full flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 border border-violet-500/50 text-base">
+                        class="bg-purple-600 hover:bg-purple-700 text-white shadow-xl shadow-purple-500/30 font-semibold py-3 px-6 rounded-full flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95 border border-purple-500/50 text-base">
                         <Plus class="w-5 h-5" />
                         Confirmar
                     </button>
@@ -1255,21 +1252,13 @@ onBeforeUnmount(() => {
             </div>
         </Teleport>
 
-        <!-- Duplicate Panel Removed -->
-
-        <!-- Floating Toggle Panel Button (visible when Panel is hidden) -->
-        <button v-if="!showRightPanel" @click="toggleRightPanel"
-            class="fixed right-6 top-24 z-20 p-2 bg-white rounded-full shadow-[0_4px_10px_-1px_rgba(0,0,0,0.1)] border hover:bg-gray-50 hover:text-primary transition text-gray-400"
-            title="Mostrar Painel">
-            <Menu class="w-5 h-5" />
-        </button>
 
         <!-- Relationship File Explorer Modal -->
         <Modal :show="showRelationshipModal" @close="closeRelationshipModal" maxWidth="2xl">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-5">
                     <h2 class="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        <LinkIcon class="w-5 h-5 text-gray-500" />
+                        <LinkIcon class="w-5 h-5 text-purple-600" />
                         Qual documento você deseja relacionar?
                     </h2>
                     <button @click="closeRelationshipModal" class="text-gray-400 hover:text-gray-600">
@@ -1455,9 +1444,9 @@ onBeforeUnmount(() => {
 }
 
 .relationship-selection-area .tiptap>*:hover {
-    background-color: rgba(139, 92, 246, 0.1);
-    /* purple-500 with opacity */
-    outline: 2px solid rgba(139, 92, 246, 0.3);
+    background-color: rgba(147, 51, 234, 0.1);
+    /* purple-600 with opacity */
+    outline: 2px solid rgba(147, 51, 234, 0.3);
 }
 
 .document-has-selection>*:not(.is-selected-paragraph) {
@@ -1465,8 +1454,8 @@ onBeforeUnmount(() => {
 }
 
 .document-has-selection>*.is-selected-paragraph {
-    background-color: rgba(139, 92, 246, 0.2);
-    outline: 2px solid rgba(139, 92, 246, 0.8);
+    background-color: rgba(147, 51, 234, 0.2);
+    outline: 2px solid rgba(147, 51, 234, 0.8);
     opacity: 1;
 }
 
@@ -1759,23 +1748,6 @@ onBeforeUnmount(() => {
     height: 0;
 }
 
-/* Custom scrollbar for TOC */
-.custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
-    border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #d1d5db;
-}
 
 /* Table styles */
 .tiptap table {
