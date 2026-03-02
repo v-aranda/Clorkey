@@ -215,6 +215,7 @@ async function handleAssignedTaskDropped(payload) {
 </script>
 
 <template>
+
     <Head title="Agenda" />
 
     <AuthenticatedLayout>
@@ -222,43 +223,34 @@ async function handleAssignedTaskDropped(payload) {
         <template #header>
             <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center">
                 <div class="flex items-center">
-                    <div :class="['flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-500', theme.iconBg]">
-                        <component :is="periodIcon" :class="['h-4.5 w-4.5 transition-colors duration-500', theme.iconText]" />
+                    <div
+                        :class="['flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-500', theme.iconBg]">
+                        <component :is="periodIcon"
+                            :class="['h-4.5 w-4.5 transition-colors duration-500', theme.iconText]" />
                     </div>
                 </div>
 
                 <div class="flex flex-col items-center">
                     <h1 class="text-center text-lg font-semibold capitalize text-gray-900">{{ weekdayString }}</h1>
                     <div class="flex items-center gap-1 text-sm text-gray-500">
-                        <button
-                            type="button"
+                        <button type="button"
                             class="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                            title="Dia anterior"
-                            aria-label="Dia anterior"
-                            @click="prevDay"
-                        >
+                            title="Dia anterior" aria-label="Dia anterior" @click="prevDay">
                             <ChevronLeft class="h-4 w-4" />
                         </button>
                         <p>{{ headerDateLabel }}</p>
-                        <button
-                            type="button"
+                        <button type="button"
                             class="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                            title="Próximo dia"
-                            aria-label="Próximo dia"
-                            @click="nextDay"
-                        >
+                            title="Próximo dia" aria-label="Próximo dia" @click="nextDay">
                             <ChevronRight class="h-4 w-4" />
                         </button>
                     </div>
                 </div>
 
                 <div class="flex justify-end">
-                    <button
-                        v-if="!isTodaySelected"
-                        type="button"
+                    <button v-if="!isTodaySelected" type="button"
                         class="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-                        @click="selectToday"
-                    >
+                        @click="selectToday">
                         Hoje
                     </button>
                 </div>
@@ -266,92 +258,47 @@ async function handleAssignedTaskDropped(payload) {
         </template>
 
         <!-- Content: [schedule | side panel] -->
-        <div class="flex -m-6" style="height: calc(100vh - 4rem)">
+        <div class="flex -m-6 relative overflow-hidden" style="height: calc(100vh - 4rem)">
 
             <!-- Schedule area -->
             <div :class="['flex flex-1 flex-col min-w-0 transition-colors duration-700', theme.pageBg]">
-                <ScheduleTimeline
-                    :tasks="agendaStore.tasks"
-                    :users="users"
-                    :theme="theme"
-                    :current-hour="currentHour"
-                    :now-line-percent="nowLinePercent"
-                    :is-night="isNight"
-                    :reminders="reminders"
-                    :holidays="holidaysForDay"
-                    :selected-date="formatDateToYMD(calendarDate)"
-                    @open-task-panel="openTaskPanel"
-                    @open-task-detail="openTaskDetail"
-                    @schedule-assigned-task="handleAssignedTaskDropped"
-                />
+                <ScheduleTimeline :tasks="agendaStore.tasks" :users="users" :theme="theme" :current-hour="currentHour"
+                    :now-line-percent="nowLinePercent" :is-night="isNight" :reminders="reminders"
+                    :active-task-id="detailTask?.id" :holidays="holidaysForDay"
+                    :selected-date="formatDateToYMD(calendarDate)" @open-task-panel="openTaskPanel"
+                    @open-task-detail="openTaskDetail" @schedule-assigned-task="handleAssignedTaskDropped" />
             </div>
 
             <!-- Side panel -->
-            <SidePanel
-                v-model:show="showOffcanvas"
-                v-model:activeTab="activeOffcanvasTab"
-                :theme="theme"
-                :assigned-tasks="agendaStore.assignedTasks"
-                :loading-assigned="agendaStore.loadingAssigned"
-                :users="users"
-                :calendar-date="calendarDate"
-                :month-label="monthLabel"
-                :calendar-weeks="calendarWeeks"
-                :week-day-labels="weekDayLabels"
-                :hour-string="hourString"
-                :minute-string="minuteString"
-                :weekday-short="weekdayShort"
-                :day-month-label="dayMonthLabel"
-                :period="period"
-                :selected-date="formatDateToYMD(calendarDate)"
-                :reminders="reminders"
-                :holidays="holidaysForDay"
-                :reminder-dot-dates="reminderDotDates"
-                :reminders-loading="remindersLoading"
-                :current-user-id="page.props.auth.user?.id"
-                @open-assigned-list="onTodoListRequested"
-                @create-task="openAssignedTaskCreatePanel"
-                @open-task-form="openAssignedTaskPanel"
-                @select-calendar-day="selectCalendarDay"
-                @select-today="selectToday"
-                @prev-month="prevMonth"
-                @next-month="nextMonth"
-                @reminder-created="handleReminderCreated"
-                @reminder-deleted="handleReminderDeleted"
-            />
+            <SidePanel v-model:show="showOffcanvas" v-model:activeTab="activeOffcanvasTab" :theme="theme"
+                :assigned-tasks="agendaStore.assignedTasks" :loading-assigned="agendaStore.loadingAssigned"
+                :users="users" :calendar-date="calendarDate" :month-label="monthLabel" :calendar-weeks="calendarWeeks"
+                :week-day-labels="weekDayLabels" :hour-string="hourString" :minute-string="minuteString"
+                :weekday-short="weekdayShort" :day-month-label="dayMonthLabel" :period="period"
+                :selected-date="formatDateToYMD(calendarDate)" :reminders="reminders" :holidays="holidaysForDay"
+                :reminder-dot-dates="reminderDotDates" :reminders-loading="remindersLoading"
+                :current-user-id="page.props.auth.user?.id" @open-assigned-list="onTodoListRequested"
+                @create-task="openAssignedTaskCreatePanel" @open-task-form="openAssignedTaskPanel"
+                @select-calendar-day="selectCalendarDay" @select-today="selectToday" @prev-month="prevMonth"
+                @next-month="nextMonth" @reminder-created="handleReminderCreated"
+                @reminder-deleted="handleReminderDeleted" />
 
+            <!-- Task Detail Inner Panel (Absolute to overlay SidePanel without pushing) -->
+            <div class="absolute inset-y-0 right-0 z-40 flex shadow-2xl bg-white border-l border-gray-200">
+                <TaskDetailPanel :show="showTaskDetail" :task="detailTask" :users="users"
+                    :current-user="page.props.auth.user" @close="closeTaskDetail" @deleted="handleTaskDeleted" />
+            </div>
         </div>
 
-        <!-- Task Detail Offcanvas -->
-        <TaskDetailPanel
-            :show="showTaskDetail"
-            :task="detailTask"
-            :users="users"
-            :current-user="page.props.auth.user"
-            @close="closeTaskDetail"
-            @deleted="handleTaskDeleted"
-        />
-
         <!-- Task Create Offcanvas -->
-        <TaskCreatePanel
-            :show="showTaskPanel"
-            :users="users"
-            :current-user-id="page.props.auth.user?.id"
-            :initial-hour="selectedHour"
-            :initial-date="formatDateToYMD(calendarDate)"
-            :task="panelTask"
-            :require-date-time="panelRequireDateTime"
-            :context="panelContext"
-            @close="showTaskPanel = false"
-            @created="handleTaskSaved"
-            @updated="handleTaskSaved"
-        />
+        <TaskCreatePanel :show="showTaskPanel" :users="users" :current-user-id="page.props.auth.user?.id"
+            :initial-hour="selectedHour" :initial-date="formatDateToYMD(calendarDate)" :task="panelTask"
+            :require-date-time="panelRequireDateTime" :context="panelContext" @close="showTaskPanel = false"
+            @created="handleTaskSaved" @updated="handleTaskSaved" />
 
         <!-- Toast -->
-        <div
-            v-if="showToast"
-            class="fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50 text-emerald-800 px-4 py-3 shadow-lg transition-all duration-300"
-        >
+        <div v-if="showToast"
+            class="fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-50 text-emerald-800 px-4 py-3 shadow-lg transition-all duration-300">
             <p class="text-sm font-medium">{{ toastMessage }}</p>
             <button @click="showToast = false" class="ml-2 rounded-md p-0.5 opacity-60 hover:opacity-100">
                 <X class="h-4 w-4" />

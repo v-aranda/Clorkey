@@ -87,11 +87,11 @@ class AgendaTaskController extends Controller
             ->all();
 
         $base = [
-            'user_id'     => auth()->id(),
-            'name'        => $data['name'],
+            'user_id' => auth()->id(),
+            'name' => $data['name'],
             'description' => $data['description'] ?? null,
-            'start_time'  => $data['start_time'] ?? null,
-            'end_time'         => $data['end_time'] ?? null,
+            'start_time' => $data['start_time'] ?? null,
+            'end_time' => $data['end_time'] ?? null,
             'participants' => $participants,
         ];
 
@@ -114,17 +114,17 @@ class AgendaTaskController extends Controller
                 }
 
                 AgendaTask::insert(array_map(fn($occ) => [
-                    'user_id'             => $base['user_id'],
-                    'name'                => $base['name'],
-                    'description'         => $base['description'],
-                    'start_time'          => $occ['start_time'],
-                    'end_time'            => null,
-                    'participants'        => json_encode($base['participants']),
-                    'date'                => $occ['date'],
+                    'user_id' => $base['user_id'],
+                    'name' => $base['name'],
+                    'description' => $base['description'],
+                    'start_time' => $occ['start_time'],
+                    'end_time' => null,
+                    'participants' => json_encode($base['participants']),
+                    'date' => $occ['date'],
                     'recurrence_group_id' => $groupId,
-                    'recurrence_config'   => json_encode($recurrence),
-                    'created_at'          => $now,
-                    'updated_at'          => $now,
+                    'recurrence_config' => json_encode($recurrence),
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ], $occurrences));
             } else {
                 $dates = $this->expandRecurrence($data['date'], $recurrence);
@@ -136,17 +136,17 @@ class AgendaTaskController extends Controller
                 }
 
                 AgendaTask::insert(array_map(fn($date) => [
-                    'user_id'             => $base['user_id'],
-                    'name'                => $base['name'],
-                    'description'         => $base['description'],
-                    'start_time'          => $base['start_time'],
-                    'end_time'            => $base['end_time'],
-                    'participants'        => json_encode($base['participants']),
-                    'date'                => $date,
+                    'user_id' => $base['user_id'],
+                    'name' => $base['name'],
+                    'description' => $base['description'],
+                    'start_time' => $base['start_time'],
+                    'end_time' => $base['end_time'],
+                    'participants' => json_encode($base['participants']),
+                    'date' => $date,
                     'recurrence_group_id' => $groupId,
-                    'recurrence_config'   => json_encode($recurrence),
-                    'created_at'          => $now,
-                    'updated_at'          => $now,
+                    'recurrence_config' => json_encode($recurrence),
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ], $dates));
             }
         } else {
@@ -173,6 +173,7 @@ class AgendaTaskController extends Controller
             'start_time' => array_key_exists('start_time', $data) ? $data['start_time'] : $agendaTask->start_time,
             'end_time' => array_key_exists('end_time', $data) ? $data['end_time'] : $agendaTask->end_time,
             'participants' => array_key_exists('participants', $data) ? $data['participants'] : $agendaTask->participants,
+            'status' => array_key_exists('status', $data) ? $data['status'] : $agendaTask->status,
         ]);
 
         // Keep schedule integrity: if one part of start datetime is missing, unset both.
@@ -265,7 +266,7 @@ class AgendaTaskController extends Controller
             })
             ->orderByDesc('created_at')
             ->get()
-            ->map(fn ($task) => $this->formatTask($task));
+            ->map(fn($task) => $this->formatTask($task));
 
         return response()->json(['tasks' => $tasks]);
     }
@@ -275,20 +276,21 @@ class AgendaTaskController extends Controller
     private function formatTask(AgendaTask $task): array
     {
         return [
-            'id'                  => $task->id,
-            'name'                => $task->name,
-            'description'         => $task->description,
-            'date'                => $task->date?->format('Y-m-d'),
-            'start_time'          => $task->start_time ? substr($task->start_time, 0, 5) : null,
-            'end_time'            => $task->end_time ? substr($task->end_time, 0, 5) : null,
+            'id' => $task->id,
+            'name' => $task->name,
+            'description' => $task->description,
+            'date' => $task->date?->format('Y-m-d'),
+            'start_time' => $task->start_time ? substr($task->start_time, 0, 5) : null,
+            'end_time' => $task->end_time ? substr($task->end_time, 0, 5) : null,
             'recurrence_group_id' => $task->recurrence_group_id,
-            'participants'        => collect($task->participants ?? [])
+            'participants' => collect($task->participants ?? [])
                 ->map(fn($id) => (int) $id)
                 ->filter(fn($id) => $id > 0)
                 ->unique()
                 ->values()
                 ->all(),
-            'creator'             => [
+            'status' => $task->status ?? 'todo',
+            'creator' => [
                 'id' => $task->user?->id,
                 'name' => $task->user?->name ?? 'Usuário',
                 'email' => $task->user?->email,
@@ -306,7 +308,7 @@ class AgendaTaskController extends Controller
         }
 
         $participants = collect($task->participants ?? [])
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->all();
 
         return in_array((int) $userId, $participants, true);
@@ -318,8 +320,8 @@ class AgendaTaskController extends Controller
     private function expandRecurrence(string $start, array $rec): array
     {
         $current = Carbon::parse($start);
-        $end     = Carbon::parse($rec['end_date']);
-        $dates   = [];
+        $end = Carbon::parse($rec['end_date']);
+        $dates = [];
 
         switch ($rec['type']) {
             case 'daily':
@@ -372,13 +374,13 @@ class AgendaTaskController extends Controller
      */
     private function expandHourlyRecurrence(string $startDate, string $startTime, string $endTime, array $rec): array
     {
-        $interval  = max(1, (int) ($rec['interval'] ?? 1));
-        $endDate   = Carbon::parse($rec['end_date']);
+        $interval = max(1, (int) ($rec['interval'] ?? 1));
+        $endDate = Carbon::parse($rec['end_date']);
         [$sh, $sm] = array_map('intval', explode(':', substr($startTime, 0, 5)));
-        [$eh, $em] = array_map('intval', explode(':', substr($endTime,   0, 5)));
+        [$eh, $em] = array_map('intval', explode(':', substr($endTime, 0, 5)));
 
         $occurrences = [];
-        $currentDay  = Carbon::parse($startDate);
+        $currentDay = Carbon::parse($startDate);
 
         while ($currentDay->lte($endDate) && count($occurrences) <= 500) {
             $cursor = $currentDay->copy()->setTime($sh, $sm);
@@ -386,7 +388,7 @@ class AgendaTaskController extends Controller
 
             while ($cursor->lte($dayEnd) && count($occurrences) <= 500) {
                 $occurrences[] = [
-                    'date'       => $cursor->toDateString(),
+                    'date' => $cursor->toDateString(),
                     'start_time' => $cursor->format('H:i'),
                 ];
                 $cursor->addHours($interval);

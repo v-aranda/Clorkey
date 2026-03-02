@@ -13,6 +13,7 @@ const props = defineProps({
     reminders: { type: Array, default: () => [] },
     holidays: { type: Array, default: () => [] },
     selectedDate: { type: String, default: '' },
+    activeTaskId: { type: [Number, String], default: null },
 });
 
 const emit = defineEmits(['open-task-panel', 'open-task-detail', 'schedule-assigned-task']);
@@ -117,44 +118,27 @@ function onSlotDrop(event, hour) {
 </script>
 
 <template>
-    <div
-        ref="scheduleRef"
-        class="flex-1 overflow-y-auto px-6 py-4 agenda-scroll"
-        :style="{
-            '--scroll-thumb': theme.scrollThumb,
-            '--scroll-thumb-hover': theme.scrollThumbHover,
-        }"
-    >
+    <div ref="scheduleRef" class="flex-1 overflow-y-auto px-6 py-4 agenda-scroll" :style="{
+        '--scroll-thumb': theme.scrollThumb,
+        '--scroll-thumb-hover': theme.scrollThumbHover,
+    }">
         <div class="relative">
             <!-- Reminders / Holidays sticky strip -->
-            <div
-                v-if="holidays.length || reminders.length"
-                class="sticky top-0 z-20 mb-2 flex flex-wrap gap-1.5 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 backdrop-blur-sm shadow-sm"
-            >
-                <div
-                    v-for="h in holidays"
-                    :key="'holiday-' + h.name"
-                    class="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm"
-                >
+            <div v-if="holidays.length || reminders.length"
+                class="sticky top-0 z-20 mb-2 flex flex-wrap gap-1.5 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 backdrop-blur-sm shadow-sm">
+                <div v-for="h in holidays" :key="'holiday-' + h.name"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
                     🎉 {{ h.name }}
                 </div>
-                <div
-                    v-for="r in reminders"
-                    :key="'reminder-' + r.id"
-                    class="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 border border-yellow-300 px-2.5 py-0.5 text-xs font-medium text-yellow-800"
-                >
+                <div v-for="r in reminders" :key="'reminder-' + r.id"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 border border-yellow-300 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
                     🔔 {{ r.title }}
                 </div>
             </div>
 
             <!-- Hour rows -->
-            <div
-                v-for="hour in allSlots"
-                :key="hour"
-                class="relative transition-all duration-200"
-                :style="slotStyle(hour)"
-                :data-now="isCurrentHour(hour) ? '' : undefined"
-            >
+            <div v-for="hour in allSlots" :key="hour" class="relative transition-all duration-200"
+                :style="slotStyle(hour)" :data-now="isCurrentHour(hour) ? '' : undefined">
                 <div class="flex items-start">
                     <!-- Hour label -->
                     <span :class="[
@@ -165,39 +149,27 @@ function onSlotDrop(event, hour) {
                     </span>
 
                     <!-- Slot area -->
-                    <div
-                        :class="[
-                            'flex-1 cursor-pointer border-t px-3 py-2 transition-colors duration-300',
-                            theme.slotBorder,
-                            theme.slotHover,
-                            activeDropHour === hour ? theme.dropZoneActive : '',
-                            'group'
-                        ]"
-                        @click="$emit('open-task-panel', hour)"
-                        @dragover="onSlotDragOver($event, hour)"
-                        @dragleave="onSlotDragLeave(hour)"
-                        @drop="onSlotDrop($event, hour)"
-                    >
-                        <div
-                            v-if="activeDropHour === hour"
-                            :class="['mb-2 inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold shadow-sm', theme.dropBadge]"
-                        >
+                    <div :class="[
+                        'flex-1 cursor-pointer border-t px-3 py-2 transition-colors duration-300',
+                        theme.slotBorder,
+                        theme.slotHover,
+                        activeDropHour === hour ? theme.dropZoneActive : '',
+                        'group'
+                    ]" @click="$emit('open-task-panel', hour)" @dragover="onSlotDragOver($event, hour)"
+                        @dragleave="onSlotDragLeave(hour)" @drop="onSlotDrop($event, hour)">
+                        <div v-if="activeDropHour === hour"
+                            :class="['mb-2 inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold shadow-sm', theme.dropBadge]">
                             Solte para agendar em {{ formatHour(hour) }}
                         </div>
 
                         <!-- Tasks as post-its -->
                         <div v-if="tasksForHour(hour).length" class="flex flex-col gap-2 pt-1">
-                            <div
-                                v-for="task in tasksForHour(hour)"
-                                :key="task.id"
-                                :class="[
-                                    'rounded-lg px-3 py-2.5 cursor-pointer transition-all hover:shadow-md',
-                                    isNight
-                                        ? 'bg-indigo-50 border border-indigo-200/70 shadow-sm'
-                                        : 'bg-amber-50/80 border border-amber-200/60 shadow-sm'
-                                ]"
-                                @click.stop="$emit('open-task-detail', task, $event)"
-                            >
+                            <div v-for="task in tasksForHour(hour)" :key="task.id" :class="[
+                                'rounded-lg px-3 py-2.5 cursor-pointer transition-all hover:shadow-md',
+                                isNight
+                                    ? 'bg-indigo-50 border' + (activeTaskId === task.id ? ' border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)] z-10 relative' : ' border-indigo-200/70 shadow-sm')
+                                    : 'bg-amber-50/80 border' + (activeTaskId === task.id ? ' border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)] bg-indigo-50/90 z-10 relative' : ' border-amber-200/60 shadow-sm')
+                            ]" @click.stop="$emit('open-task-detail', task, $event)">
                                 <!-- Row 1: time + title -->
                                 <div class="flex items-center gap-2">
                                     <span :class="[
@@ -211,31 +183,24 @@ function onSlotDrop(event, hour) {
                                 </div>
 
                                 <!-- Row 2: description snippet -->
-                                <p
-                                    v-if="stripHtml(task.description)"
-                                    :class="[
-                                        'mt-1 text-xs leading-snug line-clamp-1',
-                                        isNight ? 'text-indigo-600/70' : 'text-gray-500'
-                                    ]"
-                                >{{ stripHtml(task.description) }}</p>
+                                <p v-if="stripHtml(task.description)" :class="[
+                                    'mt-1 text-xs leading-snug line-clamp-1',
+                                    isNight ? 'text-indigo-600/70' : 'text-gray-500'
+                                ]">{{ stripHtml(task.description) }}</p>
 
                                 <!-- Row 3: participants -->
-                                <div v-if="task.participants && task.participants.length" class="mt-1.5 flex items-center justify-end">
+                                <div v-if="task.participants && task.participants.length"
+                                    class="mt-1.5 flex items-center justify-end">
                                     <div class="flex -space-x-1.5">
-                                        <div
-                                            v-for="(pid, idx) in task.participants.slice(0, 3)"
+                                        <div v-for="(pid, idx) in task.participants.slice(0, 3)"
                                             :key="`tl-p-${task.id}-${pid}-${idx}`"
-                                            class="rounded-full ring-1 ring-white"
-                                        >
+                                            class="rounded-full ring-1 ring-white">
                                             <UserAvatar :user="getUser(pid)" size="xs" />
                                         </div>
-                                        <div
-                                            v-if="task.participants.length > 3"
-                                            :class="[
-                                                'flex items-center justify-center h-6 w-6 rounded-full ring-1 ring-white text-[9px] font-bold',
-                                                isNight ? 'bg-indigo-200 text-indigo-700' : 'bg-amber-200 text-amber-700'
-                                            ]"
-                                        >+{{ task.participants.length - 3 }}</div>
+                                        <div v-if="task.participants.length > 3" :class="[
+                                            'flex items-center justify-center h-6 w-6 rounded-full ring-1 ring-white text-[9px] font-bold',
+                                            isNight ? 'bg-indigo-200 text-indigo-700' : 'bg-amber-200 text-amber-700'
+                                        ]">+{{ task.participants.length - 3 }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -248,11 +213,8 @@ function onSlotDrop(event, hour) {
                 </div>
 
                 <!-- "Now" line -->
-                <div
-                    v-if="isCurrentHour(hour)"
-                    class="pointer-events-none absolute z-10 flex items-center"
-                    :style="{ top: nowLinePercent + '%', left: '-1.5rem', right: '-1.5rem' }"
-                >
+                <div v-if="isCurrentHour(hour)" class="pointer-events-none absolute z-10 flex items-center"
+                    :style="{ top: nowLinePercent + '%', left: '-1.5rem', right: '-1.5rem' }">
                     <span :class="[
                         'rounded-r-full px-2.5 py-[2px] text-[10px] font-semibold text-white shadow-sm transition-colors duration-500',
                         theme.nowBg, theme.nowShadow
@@ -283,13 +245,23 @@ function onSlotDrop(event, hour) {
     scrollbar-width: thin;
     scrollbar-color: var(--scroll-thumb) transparent;
 }
-.agenda-scroll::-webkit-scrollbar { width: 6px; }
-.agenda-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.agenda-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.agenda-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 .agenda-scroll::-webkit-scrollbar-thumb {
     background: var(--scroll-thumb);
     border-radius: 9999px;
 }
-.agenda-scroll::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
+
+.agenda-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--scroll-thumb-hover);
+}
 
 .line-clamp-1 {
     display: -webkit-box;
@@ -298,9 +270,21 @@ function onSlotDrop(event, hour) {
     overflow: hidden;
 }
 
-.diary-prose :deep(p) { margin: 0.2rem 0; }
+.diary-prose :deep(p) {
+    margin: 0.2rem 0;
+}
+
 .diary-prose :deep(ul),
-.diary-prose :deep(ol) { padding-left: 1.25rem; margin: 0.2rem 0; }
-.diary-prose :deep(li) { margin: 0.1rem 0; }
-.diary-prose :deep(strong) { font-weight: 600; }
+.diary-prose :deep(ol) {
+    padding-left: 1.25rem;
+    margin: 0.2rem 0;
+}
+
+.diary-prose :deep(li) {
+    margin: 0.1rem 0;
+}
+
+.diary-prose :deep(strong) {
+    font-weight: 600;
+}
 </style>
