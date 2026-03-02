@@ -58,12 +58,17 @@ export const useQuadroStore = defineStore('quadro', () => {
         task.status = newStatus;
 
         try {
-            await axios.patch(route('agenda.tasks.update', taskId), {
+            const resp = await axios.patch(route('agenda.tasks.update', taskId), {
                 status: newStatus,
                 context: 'quadro_status',
             }, {
                 headers: { Accept: 'application/json' },
             });
+
+            // Merge server response back into local state to keep all fields in sync
+            if (resp.data?.task) {
+                Object.assign(task, resp.data.task);
+            }
         } catch (e) {
             // Rollback on error
             task.status = oldStatus;
