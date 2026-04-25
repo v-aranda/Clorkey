@@ -104,6 +104,7 @@ class QuadroController extends Controller
             'name' => $task->name,
             'description' => $task->description,
             'date' => $task->date?->format('Y-m-d'),
+            'deadline' => $task->deadline?->format('Y-m-d'),
             'start_time' => $task->start_time ? substr($task->start_time, 0, 5) : null,
             'end_time' => $task->end_time ? substr($task->end_time, 0, 5) : null,
             'status' => $task->status ?? 'todo',

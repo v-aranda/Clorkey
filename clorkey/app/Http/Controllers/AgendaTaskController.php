@@ -93,6 +93,7 @@ class AgendaTaskController extends Controller
             'start_time' => $data['start_time'] ?? null,
             'end_time' => $data['end_time'] ?? null,
             'participants' => $participants,
+            'parent_id' => $data['parent_id'] ?? null,
         ];
 
         if ($recurrence && !empty($data['date']) && !empty($data['start_time'])) {
@@ -150,7 +151,7 @@ class AgendaTaskController extends Controller
                 ], $dates));
             }
         } else {
-            AgendaTask::create([...$base, 'date' => $data['date'] ?? null]);
+            AgendaTask::create([...$base, 'date' => $data['date'] ?? null, 'deadline' => $data['deadline'] ?? null]);
         }
 
         $redirectDate = $data['date'] ?? today()->toDateString();
@@ -174,6 +175,8 @@ class AgendaTaskController extends Controller
             'end_time' => array_key_exists('end_time', $data) ? $data['end_time'] : $agendaTask->end_time,
             'participants' => array_key_exists('participants', $data) ? $data['participants'] : $agendaTask->participants,
             'status' => array_key_exists('status', $data) ? $data['status'] : $agendaTask->status,
+            'parent_id' => array_key_exists('parent_id', $data) ? $data['parent_id'] : $agendaTask->parent_id,
+            'deadline' => array_key_exists('deadline', $data) ? $data['deadline'] : $agendaTask->deadline,
         ]);
 
         // Keep schedule integrity: if one part of start datetime is missing, unset both.
@@ -196,15 +199,80 @@ class AgendaTaskController extends Controller
         return back()->with('success', 'Tarefa atualizada com sucesso.');
     }
 
-    public function destroy(AgendaTask $agendaTask): RedirectResponse
+    public function destroy(AgendaTask $agendaTask): RedirectResponse|JsonResponse
     {
         if ($agendaTask->user_id !== auth()->id()) {
             abort(403);
         }
 
+        if ($agendaTask->children()->exists()) {
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'message' => 'Não é possível excluir uma tarefa que possui subtarefas.',
+                ], 422);
+            }
+
+            return back()->withErrors([
+                'delete' => 'Não é possível excluir uma tarefa que possui subtarefas.',
+            ]);
+        }
+
         $agendaTask->delete();
 
         return back()->with('success', 'Tarefa removida com sucesso.');
+    }
+
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $request->validate([
+            'task_ids' => ['required', 'array', 'min:1'],
+            'task_ids.*' => ['integer'],
+        ]);
+
+        $userId = auth()->id();
+        $taskIds = array_map('intval', $request->input('task_ids'));
+
+        $tasks = AgendaTask::whereIn('id', $taskIds)
+            ->where('user_id', $userId)
+            ->get();
+
+        if ($tasks->isEmpty()) {
+            return response()->json(['message' => 'Nenhuma tarefa encontrada ou sem permissão.'], 404);
+        }
+
+        foreach ($tasks as $task) {
+            if ($task->children()->exists()) {
+                return response()->json([
+                    'message' => "Não é possível excluir a tarefa \"{$task->name}\" pois ela possui subtarefas.",
+                ], 422);
+            }
+        }
+
+        $deletedIds = $tasks->pluck('id')->all();
+
+        AgendaTask::whereIn('id', $deletedIds)->delete();
+
+        return response()->json(['deleted_ids' => $deletedIds]);
+    }
+
+    public function recurrenceOccurrences(AgendaTask $agendaTask): JsonResponse
+    {
+        if ($agendaTask->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        if (!$agendaTask->recurrence_group_id) {
+            return response()->json(['tasks' => []]);
+        }
+
+        $tasks = AgendaTask::where('recurrence_group_id', $agendaTask->recurrence_group_id)
+            ->with('user:id,name,email,avatar_path')
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get()
+            ->map(fn($task) => $this->formatTask($task));
+
+        return response()->json(['tasks' => $tasks]);
     }
 
     public function users()
@@ -277,6 +345,7 @@ class AgendaTaskController extends Controller
     {
         return [
             'id' => $task->id,
+            'parent_id' => $task->parent_id,
             'name' => $task->name,
             'description' => $task->description,
             'date' => $task->date?->format('Y-m-d'),

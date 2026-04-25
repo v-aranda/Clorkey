@@ -2,7 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import { EditorContent } from '@tiptap/vue-3';
-import { X, Bold, Italic, Strikethrough, List, ListOrdered, ImageIcon, Link2, Users, Repeat2 } from 'lucide-vue-next';
+import { X, Bold, Italic, Strikethrough, List, ListOrdered, ImageIcon, Link2, Users, Repeat2, CalendarDays } from 'lucide-vue-next';
 import ParticipantSelector from './ParticipantSelector.vue';
 import { useTiptapEditor } from '@/composables/useTiptapEditor';
 
@@ -26,6 +26,10 @@ const taskForm = useForm({
     date: '',
     start_time: '',
     end_time: '',
+    has_deadline: false,
+    deadline: '',
+    resolution_time: '',
+    resolution_unit: 'days',
     participants: [],
     recurrence: null,
     context: 'default',
@@ -50,6 +54,10 @@ const recurrenceType     = ref('weekly');
 const recurrenceInterval = ref(1);
 const recurrenceDays     = ref([]);
 const recurrenceEndDate  = ref('');
+const deadlineEnabled    = ref(false);
+const deadlineDate       = ref('');
+const resolutionTime     = ref(1);
+const resolutionUnit     = ref('days');
 
 const recurrenceTypes = [
     { value: 'daily',   label: 'Dias'   },
@@ -79,6 +87,14 @@ const intervalUnit = computed(() => {
 const canConfigureRecurrence = computed(() =>
     Boolean(taskForm.date && taskForm.start_time)
 );
+
+const deadlineUsesDuration = computed(() => recurrenceEnabled.value);
+
+const resolutionUnitOptions = [
+    { value: 'hours', label: 'Horas' },
+    { value: 'days', label: 'Dias' },
+    { value: 'months', label: 'Meses' },
+];
 
 function toggleDay(dow) {
     const idx = recurrenceDays.value.indexOf(dow);
@@ -120,6 +136,10 @@ function resetFormForCreate() {
         ? `${String(props.initialHour).padStart(2, '0')}:00`
         : '';
     taskForm.end_time = null;
+    taskForm.has_deadline = false;
+    taskForm.deadline = '';
+    taskForm.resolution_time = '';
+    taskForm.resolution_unit = 'days';
     taskForm.participants = [];
     const currentUserId = Number(props.currentUserId);
     if (!Number.isNaN(currentUserId) && currentUserId > 0) {
@@ -134,6 +154,10 @@ function resetFormForCreate() {
         ? [new Date(taskForm.date + 'T12:00:00').getDay()]
         : [];
     recurrenceEndDate.value = '';
+    deadlineEnabled.value = false;
+    deadlineDate.value = '';
+    resolutionTime.value = 1;
+    resolutionUnit.value = 'days';
     nextTick(() => { editor.value?.commands.setContent(''); });
 }
 
@@ -145,6 +169,10 @@ function resetFormForEdit() {
     taskForm.date = props.task?.date || '';
     taskForm.start_time = props.task?.start_time || '';
     taskForm.end_time = props.task?.end_time || null;
+    taskForm.has_deadline = Boolean(props.task?.deadline || props.task?.resolution_time);
+    taskForm.deadline = props.task?.deadline || '';
+    taskForm.resolution_time = props.task?.resolution_time || '';
+    taskForm.resolution_unit = props.task?.resolution_unit || 'days';
     taskForm.participants = Array.isArray(props.task?.participants) ? [...props.task.participants] : [];
     taskForm.recurrence = null;
     taskForm.context = props.context || 'default';
@@ -155,6 +183,10 @@ function resetFormForEdit() {
         ? [new Date(taskForm.date + 'T12:00:00').getDay()]
         : [];
     recurrenceEndDate.value = '';
+    deadlineEnabled.value = Boolean(props.task?.deadline || props.task?.resolution_time);
+    deadlineDate.value = props.task?.deadline || '';
+    resolutionTime.value = props.task?.resolution_time || 1;
+    resolutionUnit.value = props.task?.resolution_unit || 'days';
     nextTick(() => { editor.value?.commands.setContent(taskForm.description || ''); });
 }
 
@@ -170,39 +202,44 @@ watch(() => props.show, (val) => {
 
 // ─── Submit ───────────────────────────────────────────────────────────────────
 function submitTask() {
-    if (editor.value) {
-        taskForm.description = editor.value.getHTML();
-    }
-    if (!taskForm.date || taskForm.date.trim() === '') {
-        taskForm.date = null;
-    }
-    if (!taskForm.start_time || taskForm.start_time.trim() === '') {
-        taskForm.start_time = null;
-    }
-    if (!taskForm.end_time || taskForm.end_time.trim() === '') {
-        taskForm.end_time = null;
-    }
-
-    if (!props.requireDateTime && (!taskForm.date || !taskForm.start_time)) {
-        taskForm.date = null;
-        taskForm.start_time = null;
-        taskForm.end_time = null;
-    }
-
-    taskForm.recurrence = recurrenceEnabled.value ? {
+    const payload = {
+        name: taskForm.name,
+        description: editor.value ? editor.value.getHTML() : taskForm.description,
+        date: taskForm.date?.trim() ? taskForm.date : null,
+        start_time: taskForm.start_time?.trim() ? taskForm.start_time : null,
+        end_time: taskForm.end_time?.trim() ? taskForm.end_time : null,
+        has_deadline: deadlineEnabled.value,
+        deadline: deadlineEnabled.value && !deadlineUsesDuration.value && deadlineDate.value?.trim()
+            ? deadlineDate.value
+            : null,
+        resolution_time: deadlineEnabled.value && deadlineUsesDuration.value
+            ? Number(resolutionTime.value) || null
+            : null,
+        resolution_unit: deadlineEnabled.value && deadlineUsesDuration.value
+            ? resolutionUnit.value
+            : null,
+        participants: [...taskForm.participants],
+        recurrence: recurrenceEnabled.value ? {
         type:         recurrenceType.value,
         interval:     recurrenceInterval.value,
         days_of_week: recurrenceType.value === 'weekly' ? [...recurrenceDays.value] : undefined,
         end_date:     recurrenceEndDate.value,
-    } : null;
+        } : null,
+        context: props.context || 'default',
+    };
 
-    if (!taskForm.date || !taskForm.start_time) {
-        taskForm.recurrence = null;
+    if (!props.requireDateTime && (!payload.date || !payload.start_time)) {
+        payload.date = null;
+        payload.start_time = null;
+        payload.end_time = null;
     }
 
-    taskForm.context = props.context || 'default';
+    if (!payload.date || !payload.start_time) {
+        payload.recurrence = null;
+    }
 
     if (isEditing.value && props.task?.id) {
+        taskForm.transform(() => payload);
         taskForm.put(route('agenda.tasks.update', props.task.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -213,6 +250,7 @@ function submitTask() {
         return;
     }
 
+    taskForm.transform(() => payload);
     taskForm.post(route('agenda.tasks.store'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -256,6 +294,79 @@ function submitTask() {
                             <p v-if="taskForm.errors.name" class="text-sm text-red-500 mt-1">{{ taskForm.errors.name }}</p>
                         </div>
 
+                        <!-- Description (TipTap) -->
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">Descrição</label>
+                            <div class="mt-1.5 rounded-md border border-input shadow-sm overflow-hidden">
+                                <!-- Mini toolbar -->
+                                <div class="flex items-center gap-0.5 border-b border-gray-100 px-2 py-1.5 bg-gray-50/80">
+                                    <button
+                                        type="button"
+                                        @click="editor?.chain().focus().toggleBold().run()"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('bold') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Negrito"
+                                    ><Bold class="h-3.5 w-3.5" /></button>
+                                    <button
+                                        type="button"
+                                        @click="editor?.chain().focus().toggleItalic().run()"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('italic') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Itálico"
+                                    ><Italic class="h-3.5 w-3.5" /></button>
+                                    <button
+                                        type="button"
+                                        @click="editor?.chain().focus().toggleStrike().run()"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('strike') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Tachado"
+                                    ><Strikethrough class="h-3.5 w-3.5" /></button>
+                                    <div class="mx-1 h-4 w-px bg-gray-200"></div>
+                                    <button
+                                        type="button"
+                                        @click="editor?.chain().focus().toggleBulletList().run()"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('bulletList') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Lista"
+                                    ><List class="h-3.5 w-3.5" /></button>
+                                    <button
+                                        type="button"
+                                        @click="editor?.chain().focus().toggleOrderedList().run()"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('orderedList') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Lista numerada"
+                                    ><ListOrdered class="h-3.5 w-3.5" /></button>
+                                    <div class="mx-1 h-4 w-px bg-gray-200"></div>
+                                    <button
+                                        type="button"
+                                        @click="triggerImageUpload"
+                                        class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                                        title="Inserir imagem"
+                                    ><ImageIcon class="h-3.5 w-3.5" /></button>
+                                    <button
+                                        type="button"
+                                        @click="insertLink"
+                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('link') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
+                                        title="Inserir link"
+                                    ><Link2 class="h-3.5 w-3.5" /></button>
+                                </div>
+                                <!-- Editor -->
+                                <EditorContent :editor="editor" />
+                                <input ref="taskImageInput" type="file" accept="image/*" class="hidden" @change="onImageSelected" />
+                            </div>
+                            <p v-if="taskForm.errors.description" class="text-sm text-red-500 mt-1">{{ taskForm.errors.description }}</p>
+                        </div>
+
+                        <!-- Participants -->
+                        <div>
+                            <label class="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                                <Users class="h-3.5 w-3.5" />
+                                Participantes
+                            </label>
+                            <ParticipantSelector
+                                :users="users"
+                                v-model="taskForm.participants"
+                            />
+                            <p v-if="taskForm.errors.participants" class="text-sm text-red-500 mt-1">
+                                {{ taskForm.errors.participants }}
+                            </p>
+                        </div>
+
                         <!-- Date & Start Time (2 cols) -->
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -279,12 +390,15 @@ function submitTask() {
                         </div>
 
                         <!-- Recurrence section -->
-                        <div v-if="canConfigureRecurrence" class="rounded-lg border border-gray-200 overflow-hidden">
+                        <div class="rounded-lg border border-gray-200 overflow-hidden">
                             <!-- Toggle header -->
                             <button
                                 type="button"
-                                @click="recurrenceEnabled = !recurrenceEnabled"
-                                class="flex w-full items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                @click="canConfigureRecurrence && (recurrenceEnabled = !recurrenceEnabled)"
+                                :class="[
+                                    'flex w-full items-center justify-between px-4 py-3 transition-colors',
+                                    canConfigureRecurrence ? 'bg-gray-50 hover:bg-gray-100' : 'bg-gray-50/70 cursor-not-allowed'
+                                ]"
                             >
                                 <div class="flex items-center gap-2">
                                     <Repeat2 class="h-4 w-4 text-gray-500" />
@@ -293,11 +407,11 @@ function submitTask() {
                                 <!-- Toggle switch visual -->
                                 <div :class="[
                                     'relative h-5 w-9 rounded-full transition-colors duration-200 pointer-events-none',
-                                    recurrenceEnabled ? 'bg-gray-900' : 'bg-gray-300'
+                                    recurrenceEnabled && canConfigureRecurrence ? 'bg-gray-900' : 'bg-gray-300'
                                 ]">
                                     <div :class="[
                                         'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
-                                        recurrenceEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                                        recurrenceEnabled && canConfigureRecurrence ? 'translate-x-4' : 'translate-x-0.5'
                                     ]" />
                                 </div>
                             </button>
@@ -391,83 +505,87 @@ function submitTask() {
                                 </p>
 
                             </div>
-                        </div>
-
-                        <p v-else class="text-xs text-muted-foreground">
-                            Preencha data e horário para habilitar recorrência.
-                        </p>
-
-                        <!-- Description (TipTap) -->
-                        <div>
-                            <label class="text-sm font-medium text-gray-700">Descrição</label>
-                            <div class="mt-1.5 rounded-md border border-input shadow-sm overflow-hidden">
-                                <!-- Mini toolbar -->
-                                <div class="flex items-center gap-0.5 border-b border-gray-100 px-2 py-1.5 bg-gray-50/80">
-                                    <button
-                                        type="button"
-                                        @click="editor?.chain().focus().toggleBold().run()"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('bold') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Negrito"
-                                    ><Bold class="h-3.5 w-3.5" /></button>
-                                    <button
-                                        type="button"
-                                        @click="editor?.chain().focus().toggleItalic().run()"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('italic') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Itálico"
-                                    ><Italic class="h-3.5 w-3.5" /></button>
-                                    <button
-                                        type="button"
-                                        @click="editor?.chain().focus().toggleStrike().run()"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('strike') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Tachado"
-                                    ><Strikethrough class="h-3.5 w-3.5" /></button>
-                                    <div class="mx-1 h-4 w-px bg-gray-200"></div>
-                                    <button
-                                        type="button"
-                                        @click="editor?.chain().focus().toggleBulletList().run()"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('bulletList') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Lista"
-                                    ><List class="h-3.5 w-3.5" /></button>
-                                    <button
-                                        type="button"
-                                        @click="editor?.chain().focus().toggleOrderedList().run()"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('orderedList') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Lista numerada"
-                                    ><ListOrdered class="h-3.5 w-3.5" /></button>
-                                    <div class="mx-1 h-4 w-px bg-gray-200"></div>
-                                    <button
-                                        type="button"
-                                        @click="triggerImageUpload"
-                                        class="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                                        title="Inserir imagem"
-                                    ><ImageIcon class="h-3.5 w-3.5" /></button>
-                                    <button
-                                        type="button"
-                                        @click="insertLink"
-                                        :class="['rounded p-1.5 transition-colors', editor?.isActive('link') ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700']"
-                                        title="Inserir link"
-                                    ><Link2 class="h-3.5 w-3.5" /></button>
-                                </div>
-                                <!-- Editor -->
-                                <EditorContent :editor="editor" />
-                                <input ref="taskImageInput" type="file" accept="image/*" class="hidden" @change="onImageSelected" />
+                            <div v-else-if="!canConfigureRecurrence" class="px-4 py-4 border-t border-gray-100">
+                                <p class="text-xs text-muted-foreground">
+                                    Preencha data e horário para habilitar recorrência.
+                                </p>
                             </div>
-                            <p v-if="taskForm.errors.description" class="text-sm text-red-500 mt-1">{{ taskForm.errors.description }}</p>
                         </div>
 
-                        <!-- Participants -->
-                        <div>
-                            <label class="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                                <Users class="h-3.5 w-3.5" />
-                                Participantes
-                            </label>
-                            <ParticipantSelector
-                                :users="users"
-                                v-model="taskForm.participants"
-                            />
-                            <p v-if="taskForm.errors.participants" class="text-sm text-red-500 mt-1">
-                                {{ taskForm.errors.participants }}
-                            </p>
+                        <!-- Deadline section -->
+                        <div class="rounded-lg border border-gray-200 overflow-hidden">
+                            <button
+                                type="button"
+                                @click="deadlineEnabled = !deadlineEnabled"
+                                class="flex w-full items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <CalendarDays class="h-4 w-4 text-gray-500" />
+                                    <span class="text-sm font-medium text-gray-700">Prazo</span>
+                                </div>
+                                <div :class="[
+                                    'relative h-5 w-9 rounded-full transition-colors duration-200 pointer-events-none',
+                                    deadlineEnabled ? 'bg-gray-900' : 'bg-gray-300'
+                                ]">
+                                    <div :class="[
+                                        'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                                        deadlineEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                                    ]" />
+                                </div>
+                            </button>
+
+                            <div v-if="deadlineEnabled" class="px-4 py-4 space-y-4 border-t border-gray-100">
+                                <div v-if="!deadlineUsesDuration">
+                                    <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Data final</label>
+                                    <input
+                                        v-model="deadlineDate"
+                                        type="date"
+                                        class="mt-1.5 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    />
+                                    <p v-if="taskForm.errors.deadline" class="text-xs text-red-500 mt-1">
+                                        {{ taskForm.errors.deadline }}
+                                    </p>
+                                </div>
+
+                                <div v-else class="space-y-4">
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Duração</label>
+                                        <input
+                                            v-model="resolutionTime"
+                                            type="number"
+                                            min="1"
+                                            max="999"
+                                            class="mt-1.5 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                        />
+                                        <p v-if="taskForm.errors.resolution_time" class="text-xs text-red-500 mt-1">
+                                            {{ taskForm.errors.resolution_time }}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Unidade</label>
+                                        <div class="mt-1.5 grid grid-cols-3 gap-2">
+                                            <button
+                                                v-for="option in resolutionUnitOptions"
+                                                :key="option.value"
+                                                type="button"
+                                                @click="resolutionUnit = option.value"
+                                                :class="[
+                                                    'rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                                                    resolutionUnit === option.value
+                                                        ? 'border-gray-900 bg-gray-900 text-white'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                                ]"
+                                            >
+                                                {{ option.label }}
+                                            </button>
+                                        </div>
+                                        <p v-if="taskForm.errors.resolution_unit" class="text-xs text-red-500 mt-1">
+                                            {{ taskForm.errors.resolution_unit }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Submit -->

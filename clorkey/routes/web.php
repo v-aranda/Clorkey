@@ -29,9 +29,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/agenda/tasks/list', [AgendaTaskController::class, 'list'])->name('agenda.tasks.list');
     Route::get('/agenda/tasks/participating', [AgendaTaskController::class, 'participating'])->name('agenda.tasks.participating');
     Route::get('/agenda/tasks/assigned', [AgendaTaskController::class, 'assigned'])->name('agenda.tasks.assigned');
+    Route::match(['post', 'delete'], '/agenda/tasks/bulk-destroy', [AgendaTaskController::class, 'bulkDestroy'])->name('agenda.tasks.bulk-destroy');
     Route::post('/agenda/tasks', [AgendaTaskController::class, 'store'])->name('agenda.tasks.store');
     Route::patch('/agenda/tasks/{agendaTask}', [AgendaTaskController::class, 'update'])->name('agenda.tasks.update');
     Route::delete('/agenda/tasks/{agendaTask}', [AgendaTaskController::class, 'destroy'])->name('agenda.tasks.destroy');
+    Route::get('/agenda/tasks/{agendaTask}/recurrence-occurrences', [AgendaTaskController::class, 'recurrenceOccurrences'])->name('agenda.tasks.recurrence-occurrences');
     Route::get('/agenda/users', [AgendaTaskController::class, 'users'])->name('agenda.users');
 
     // ── Reminders ─────────────────────────────────────────────────────────────

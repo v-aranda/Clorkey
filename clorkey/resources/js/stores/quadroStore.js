@@ -5,6 +5,7 @@ import axios from 'axios';
 export const useQuadroStore = defineStore('quadro', () => {
     const tasks = ref([]);
     const loading = ref(false);
+    const selectedParticipantId = ref(null);
 
     /**
      * All tasks sorted by sort_order (ascending).
@@ -14,6 +15,20 @@ export const useQuadroStore = defineStore('quadro', () => {
     const sortedTasks = computed(() =>
         [...tasks.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     );
+
+    const filteredTasks = computed(() => {
+        const id = selectedParticipantId.value;
+        if (id === null) return sortedTasks.value;
+        return sortedTasks.value.filter(task => {
+            const inParticipants = (task.participants ?? []).map(Number).includes(Number(id));
+            const isCreator = Number(task.creator?.id) === Number(id);
+            return inParticipants || isCreator;
+        });
+    });
+
+    function setParticipantFilter(id) {
+        selectedParticipantId.value = (id !== undefined && id !== null && id !== '') ? Number(id) : null;
+    }
 
     /**
      * Tasks grouped by status. Within each group, items
@@ -121,10 +136,13 @@ export const useQuadroStore = defineStore('quadro', () => {
         tasks,
         loading,
         sortedTasks,
+        filteredTasks,
         tasksByStatus,
+        selectedParticipantId,
         setTasks,
         fetchTasks,
         updateTaskStatus,
         reorderTasks,
+        setParticipantFilter,
     };
 });

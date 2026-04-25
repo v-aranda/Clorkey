@@ -153,9 +153,19 @@ function closeTaskDetail() {
     detailTask.value = null;
 }
 
-function handleTaskDeleted(taskId) {
-    agendaStore.tasks = agendaStore.tasks.filter(t => t.id !== taskId);
-    triggerToast('Tarefa removida com sucesso.');
+function handleTaskDeleted(taskIds) {
+    const ids = (Array.isArray(taskIds) ? taskIds : [taskIds])
+        .map((id) => Number(id))
+        .filter((id) => !Number.isNaN(id));
+
+    agendaStore.tasks = agendaStore.tasks.filter((task) => !ids.includes(Number(task.id)));
+    agendaStore.assignedTasks = agendaStore.assignedTasks.filter((task) => !ids.includes(Number(task.id)));
+
+    if (detailTask.value && ids.includes(Number(detailTask.value.id))) {
+        closeTaskDetail();
+    }
+
+    triggerToast(ids.length > 1 ? 'Tarefas removidas com sucesso.' : 'Tarefa removida com sucesso.');
 }
 
 function onTodoListRequested() {

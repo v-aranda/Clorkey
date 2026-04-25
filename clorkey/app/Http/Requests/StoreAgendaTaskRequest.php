@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Rules\NotCircularParent;
 
 class StoreAgendaTaskRequest extends FormRequest
 {
@@ -24,6 +25,7 @@ class StoreAgendaTaskRequest extends FormRequest
             'end_time'                        => ['nullable', 'date_format:H:i', 'after:start_time'],
             'participants'                    => ['required', 'array', 'min:1'],
             'participants.*'                  => ['integer', 'exists:users,id'],
+            'parent_id'                       => ['nullable', 'integer', 'exists:agenda_tasks,id'],
             'context'                         => ['nullable', 'string'],
             // Recorrência
             'recurrence'                      => ['nullable', 'array'],
@@ -32,6 +34,7 @@ class StoreAgendaTaskRequest extends FormRequest
             'recurrence.days_of_week'         => ['required_if:recurrence.type,weekly', 'nullable', 'array', 'min:1'],
             'recurrence.days_of_week.*'       => ['integer', 'between:0,6'],
             'recurrence.end_date'             => ['required_with:recurrence', 'date', 'after:date'],
+            'deadline'                        => ['nullable', 'date'],
         ];
     }
 

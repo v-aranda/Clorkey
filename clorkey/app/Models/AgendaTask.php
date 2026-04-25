@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AgendaTask extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     const STATUS_TODO = 'todo';
     const STATUS_DOING = 'doing';
@@ -22,6 +23,7 @@ class AgendaTask extends Model
     protected $casts = [
         'participants' => 'array',
         'date' => 'date',
+        'deadline' => 'date',
         'recurrence_config' => 'array',
         'sort_order' => 'integer',
     ];
@@ -29,6 +31,21 @@ class AgendaTask extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(AgendaTask::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(AgendaTask::class, 'parent_id');
+    }
+
+    public function scopeHasChildren($query)
+    {
+        return $query->whereHas('children');
     }
 
     public function activities(): HasMany

@@ -56,6 +56,10 @@ function deleteReminder(id) {
     emit('reminder-deleted', id);
 }
 
+function taskReminderLabel() {
+    return 'Vence hoje';
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const hasContent = computed(() => props.holidays.length > 0 || props.reminders.length > 0 || showForm.value);
 </script>
@@ -101,12 +105,31 @@ const hasContent = computed(() => props.holidays.length > 0 || props.reminders.l
                 <div
                     v-for="r in reminders"
                     :key="r.id"
-                    class="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2"
+                    :class="[
+                        'flex items-center gap-2 rounded-lg px-3 py-2',
+                        r.kind === 'task_deadline'
+                            ? 'border border-violet-200 bg-violet-50'
+                            : 'border border-blue-100 bg-blue-50'
+                    ]"
                 >
-                    <Bell class="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                    <span class="flex-1 text-xs font-medium text-blue-800 leading-tight truncate">{{ r.title }}</span>
+                    <Bell :class="[
+                        'h-3.5 w-3.5 shrink-0',
+                        r.kind === 'task_deadline' ? 'text-violet-500' : 'text-blue-400'
+                    ]" />
+                    <div class="min-w-0 flex-1">
+                        <span :class="[
+                            'block text-xs font-medium leading-tight truncate',
+                            r.kind === 'task_deadline' ? 'text-violet-900' : 'text-blue-800'
+                        ]">{{ r.title }}</span>
+                        <span
+                            v-if="r.kind === 'task_deadline'"
+                            class="mt-0.5 block text-[10px] font-medium uppercase tracking-wide text-violet-600"
+                        >
+                            {{ taskReminderLabel(r) }}
+                        </span>
+                    </div>
                     <button
-                        v-if="r.user_id === currentUserId"
+                        v-if="r.user_id === currentUserId && r.kind !== 'task_deadline'"
                         type="button"
                         @click="deleteReminder(r.id)"
                         class="ml-1 rounded p-0.5 text-blue-300 hover:text-red-400 transition-colors"

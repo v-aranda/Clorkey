@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\AgendaTask;
+use App\Rules\NotCircularParent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,6 +27,10 @@ class UpdateAgendaTaskRequest extends FormRequest
             $requiresDateTime = false;
         }
 
+        if ($context === 'gantt_resize') {
+            $requiresDateTime = false;
+        }
+
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
@@ -40,6 +45,8 @@ class UpdateAgendaTaskRequest extends FormRequest
             'participants.*' => ['integer', 'exists:users,id'],
             'context' => ['nullable', 'string'],
             'status' => ['sometimes', 'nullable', 'string', Rule::in(AgendaTask::STATUSES)],
+            'parent_id' => ['sometimes', 'nullable', 'integer', 'exists:agenda_tasks,id', new NotCircularParent($this->route('agendaTask')?->id)],
+            'deadline' => ['sometimes', 'nullable', 'date'],
         ];
     }
 

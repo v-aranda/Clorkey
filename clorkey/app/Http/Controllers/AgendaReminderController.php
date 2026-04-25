@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AgendaTask;
 use App\Models\AgendaReminder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,10 +31,40 @@ class AgendaReminderController extends Controller
                     'participants' => $r->participants ?? [],
                     'user_id'      => $r->user_id,
                     'user_name'    => $r->user->name ?? null,
+                    'kind'         => 'manual',
                 ];
             });
 
-        return response()->json($reminders);
+        $taskReminders = AgendaTask::query()
+            ->whereNotNull('deadline')
+            ->where('deadline', $request->date)
+            ->where('status', '!=', AgendaTask::STATUS_DONE)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhereJsonContains('participants', $userId);
+            })
+            ->with('user:id,name,email')
+            ->orderBy('name')
+            ->get()
+            ->map(function (AgendaTask $task) use ($request) {
+                return [
+                    'id'           => 'task-deadline-' . $task->id,
+                    'title'        => $task->name,
+                    'date'         => $request->date,
+                    'participants' => $task->participants ?? [],
+                    'user_id'      => $task->user_id,
+                    'user_name'    => $task->user->name ?? null,
+                    'kind'         => 'task_deadline',
+                    'task_id'      => $task->id,
+                ];
+            });
+
+        return response()->json(
+            $reminders
+                ->concat($taskReminders)
+                ->sortBy(fn ($item) => ($item['kind'] ?? '') . '|' . ($item['title'] ?? ''))
+                ->values()
+        );
     }
 
     public function store(Request $request)

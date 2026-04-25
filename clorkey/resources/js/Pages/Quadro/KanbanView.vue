@@ -18,11 +18,22 @@ const columns = [
     { key: 'done', dropStatus: 'done', label: 'Feito', color: 'border-t-emerald-400', badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
+// Group filteredTasks by status (respects participant filter)
+const filteredByStatus = computed(() => {
+    const grouped = { todo: [], doing: [], stopped: [], done: [] };
+    for (const task of store.filteredTasks) {
+        const s = task.status || 'todo';
+        if (grouped[s]) grouped[s].push(task);
+        else grouped.todo.push(task);
+    }
+    return grouped;
+});
+
 // "Fazendo" column shows both doing + stopped tasks
 const columnTasks = computed(() => ({
-    todo: store.tasksByStatus.todo,
-    doing: [...store.tasksByStatus.doing, ...store.tasksByStatus.stopped],
-    done: store.tasksByStatus.done,
+    todo: filteredByStatus.value.todo,
+    doing: [...filteredByStatus.value.doing, ...filteredByStatus.value.stopped],
+    done: filteredByStatus.value.done,
 }));
 </script>
 

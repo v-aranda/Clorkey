@@ -14,12 +14,11 @@ const store = useQuadroStore();
 const emit = defineEmits(['open-detail']);
 const { showToast, toastMessage, triggerToast } = useToast();
 
-// Local reactive copy for vuedraggable's v-model
+// Local reactive copy for vuedraggable's v-model — reflects filtered view
 const localList = ref([]);
 
-// Sync from store whenever sortedTasks changes
 watch(
-    () => store.sortedTasks,
+    () => store.filteredTasks,
     (newVal) => {
         localList.value = [...newVal];
     },
@@ -28,7 +27,18 @@ watch(
 
 async function onDragEnd() {
     try {
-        await store.reorderTasks(localList.value);
+        // When filter is active we need to merge the reordered filtered subset
+        // back into the full sorted list before persisting sort_order.
+        if (store.selectedParticipantId !== null) {
+            const filteredIds = new Set(localList.value.map(t => t.id));
+            const full = [...store.sortedTasks];
+            const slots = full.map((t, i) => filteredIds.has(t.id) ? i : -1).filter(i => i >= 0);
+            const merged = [...full];
+            slots.forEach((idx, i) => { merged[idx] = localList.value[i]; });
+            await store.reorderTasks(merged);
+        } else {
+            await store.reorderTasks(localList.value);
+        }
     } catch {
         triggerToast('Erro ao salvar a ordem.');
     }

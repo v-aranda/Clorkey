@@ -27,7 +27,7 @@ import {
     ChevronLeft, CheckCircle2, RefreshCw, AlertCircle, CircleDashed,
     X, GitCompare,
     Columns, Rows, Plus, Minus, Trash2,
-    Link2Off, ExternalLink, Download, FileText, RefreshCcw, Search
+    Link2Off, ExternalLink, Download, FileText, RefreshCcw, Search, LinkIcon
 } from 'lucide-vue-next';
 import Modal from '@/Components/Modal.vue';
 import axios from 'axios';
@@ -194,6 +194,7 @@ const editor = useEditor({
     extensions: [
         StarterKit.configure({
             codeBlock: false,
+            link: false,
         }),
         CodeBlockLowlight.configure({
             lowlight: createLowlight(common),
